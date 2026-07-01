@@ -1,0 +1,117 @@
+# -*- coding: utf-8 -*-
+"""签到插件 - 适配 QQ 开放平台 (与 [XY]GroupCheckIn 文本模式保持一致)"""
+
+import json
+import os
+import random
+from datetime import datetime
+
+import httpx
+
+TRIGGHT_KEYWORD = "签到"
+HELP_MESSAGE = "签到 -> 签到获取积分和好感度"
+
+# 数据文件路径
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "check_in", "users")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def _load_data(user_id: str) -> dict:
+    """加载用户签到数据"""
+    file_path = os.path.join(DATA_DIR, f"{user_id}.json")
+    defaults = {"total_days": 0, "好感度": 0, "积分": 0, "last_check": ""}
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for k, v in defaults.items():
+            data.setdefault(k, v)
+        return data
+    return defaults.copy()
+
+
+def _save_data(user_id: str, data: dict):
+    """保存用户签到数据"""
+    file_path = os.path.join(DATA_DIR, f"{user_id}.json")
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _get_daily_rank(today: str) -> int:
+    """获取今天第几名签到"""
+    count = 0
+    for filename in os.listdir(DATA_DIR):
+        if filename.endswith(".json"):
+            with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
+                try:
+                    data = json.load(f)
+                    if data.get("last_check") == today:
+                        count += 1
+                except (json.JSONDecodeError, OSError):
+                    continue
+    return count + 1
+
+
+async def _fetch_hitokoto() -> str:
+    """获取一言"""
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get("https://international.v1.hitokoto.cn/", timeout=5.0)
+            data = resp.json()
+            return f"{data['hitokoto']} —— {data.get('from_who', '未知')}, {data.get('from', '未知')}"
+    except Exception:
+        return "今日签到，好运连连~"
+
+
+async def on_message(event, actions, **kwargs):
+    """处理签到命令"""
+    user_id = str(event.user_id)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # 加载用户数据
+    data = _load_data(user_id)
+
+    # 检查是否已签到
+    if data["last_check"] == today:
+        msg = (
+            f"## 你今天已经签到过了哦~\n"
+            f"\n"
+            f"- 当前好感度：**{data['好感度']}**\n"
+            f"- 当前积分：**{data['积分']}**"
+        )
+        await actions.send(markdown={"content": msg})
+        return True
+
+    # 签到排名
+    rank = _get_daily_rank(today)
+
+    # 计算奖励（与 [XY]GroupCheckIn 文本模式一致）
+    favor = random.randint(1, 10)      # 好感度
+    points = random.randint(10, 100)   # 积分
+
+    # 更新数据
+    data["total_days"] += 1
+    data["好感度"] += favor
+    data["积分"] += points
+    data["last_check"] = today
+    _save_data(user_id, data)
+
+    # 获取一言
+    hitokoto_text = await _fetch_hitokoto()
+
+    # 发送签到结果（Markdown 格式）
+    msg = (
+        f"## 签到成功！\n"
+        f"你是第 **{rank}** 名签到的小伙伴\n"
+        f"\n"
+        f"| 项目 | 增加值 | 累计 |\n"
+        f"| :--- | :----: | :--: |\n"
+        f"| 好感度 | +{favor} | {data['好感度']} |\n"
+        f"| 积分 | +{points} | {data['积分']} |\n"
+        f"\n"
+        f"> 累计签到 **{data['total_days']}** 天\n"
+        f"---\n"
+        f"> {hitokoto_text}"
+    )
+
+    await actions.send(markdown={"content": msg})
+    return True
