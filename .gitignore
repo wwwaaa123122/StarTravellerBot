@@ -5,3 +5,4 @@ __pycache__/
 botpy.log*
 *.db
 temp/
+config.json
