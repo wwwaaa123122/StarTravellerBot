@@ -4,57 +4,55 @@
 TRIGGHT_KEYWORD = "帮助"
 HELP_MESSAGE = "帮助 -> 显示帮助信息"
 
+# 插件分类映射，与 client.py 保持一致
+PLUGIN_CATEGORIES = [
+    ("🎯 签到系统", ["checkin", "affection"]),
+    ("🌤️ 生活工具", ["weather", "ping", "hitokoto", "domain_whois", "httptest"]),
+    ("🎨 娱乐工具", ["acg_picture", "qr_code", "mc_status"]),
+    ("🎭 角色扮演", ["roleplay"]),
+    ("📺 直播监控", ["kick"]),
+]
+
+
+def _build_help_text(bot_name: str, plugins: list) -> str:
+    """根据已加载的插件列表动态生成帮助文本"""
+    lines = [f"## ✨ {bot_name} 帮助", ""]
+    lines.append("### 💡 群聊指令格式")
+    lines.append("- **@机器人 /指令** - 执行指令")
+    lines.append("")
+    lines.append("### 🎮 内置指令")
+    lines.append("")
+    lines.append("**📋 帮助**")
+    lines.append("- **@机器人 /帮助** - 显示此帮助")
+    lines.append("- **@机器人 /状态** - 查看状态")
+    lines.append("")
+
+    # 获取已加载插件的名 -> 帮助信息映射
+    plugin_help_map = {p['name']: p['help'] for p in plugins}
+
+    # 分类展示已加载的插件
+    for cat_name, plugin_names in PLUGIN_CATEGORIES:
+        matched = {name: plugin_help_map[name] for name in plugin_names if name in plugin_help_map}
+        if not matched:
+            continue
+        lines.append(f"**{cat_name}**")
+        for name, help_msg in matched.items():
+            lines.append(f"- **@机器人 /{help_msg}**")
+        lines.append("")
+
+    lines.append("> 💡 直接发送 **@机器人 /状态** 查看运行状态")
+    return "\n".join(lines)
+
 
 async def on_message(event, actions, **kwargs):
-    """显示帮助信息"""
+    """显示帮助信息（发送图片）"""
     bot_name = kwargs.get("bot_name", "星辰旅人")
     plugins = kwargs.get("plugins", [])
-    
-    help_text = f"""## ✨ {bot_name} 使用指南
 
-### 💬 群聊指令格式
-- **@机器人 /指令** - 执行指令
-- **@机器人** - 直接 AI 对话
-
-### 🎮 内置指令
-
-**📋 帮助**
-- **@机器人 /帮助** - 显示此帮助
-
-**🎯 签到系统**
-- **@机器人 /签到** - 每日签到获取积分和好感度
-- **@机器人 /好感度** - 查询好感度信息
-
-**🌤️ 生活工具**
-- **@机器人 /天气 城市** - 查询天气
-- **@机器人 /ping 域名** - Ping 测试
-- **@机器人 /一言** - 随机一言
-- **@机器人 /whois 域名** - 查询域名注册信息
-- **@机器人 /http 网址** - 检查网址HTTP状态
-
-**🤖 AI 对话**
-- **@机器人 问题** - 与 AI 对话
-
-**🎨 娱乐工具**
-- **@机器人 /生图 ACG 随机** - 生成 ACG 壁纸
-- **@机器人 /生图 ACG 电脑壁纸** - 电脑壁纸
-- **@机器人 /生图 ACG 手机壁纸** - 手机壁纸
-- **@机器人 /生图 ACG 头像** - 头像图片
-- **@机器人 /生图 ACG 背景** - 随机背景
-- **@机器人 /转码 <内容>** - 生成二维码
-- **@机器人 /mc状态 <地址>** - 查询 MC 服务器状态
-
-**🎭 角色扮演**
-- **@机器人 /角色列表** - 查看可用角色
-- **@机器人 /角色切换 角色名** - 切换角色
-- **@机器人 /角色创建 名称 描述 性格 提示词** - 创建自定义角色
-- **@机器人 /角色帮助** - 查看角色系统帮助
-
-> **💡 提示**: 
-> - 连续签到可获得额外积分和好感度
-> - 好感度影响签到奖励
-> - 切换角色后 AI 对话会使用新角色的人设
-> - 发送 @机器人 /帮助 查看此帮助"""
-    
-    await actions.send(content=help_text)
+    help_text = _build_help_text(bot_name, plugins)
+    # 优先发送帮助图片，fallback 到文本
+    if hasattr(actions, 'send_help_image'):
+        await actions.send_help_image(help_text)
+    else:
+        await actions.send(content=help_text)
     return True

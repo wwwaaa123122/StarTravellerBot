@@ -43,8 +43,8 @@ import logging as std_logging
 
 
 def load_config() -> dict:
-    """加载配置文件"""
-    config_path = os.path.join(PROJECT_ROOT, "config.json")
+    """加载 open-qq/config.json 配置文件"""
+    config_path = os.path.join(OPENQQ_DIR, "config.json")
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
 

@@ -48,13 +48,20 @@ def _parse_group_message_create(self, payload):
 
 if not hasattr(ConnectionState, "parse_group_message_create"):
     ConnectionState.parse_group_message_create = _parse_group_message_create
+
+# ==================== aiohttp 兼容补丁 ====================
+# aiohttp 3.14+ 的 FormData 移除了 _is_processed 属性，
+# botpy._FormData._gen_form_data 覆写与之不兼容。
+# 父类的 _gen_form_data 已足够，直接替换掉 botpy 的覆写。
+from botpy.http import _FormData as _BotpyFormData
+_BotpyFormData._gen_form_data = _BotpyFormData.__bases__[0]._gen_form_data
 # ==================== 补丁结束 ====================
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.context import BotContext
-from core.constants import VERSION_NAME, PLUGIN_FOLDER, HELP_BG_LOCAL
+from core.constants import VERSION_NAME, PLUGIN_FOLDER
 
 # 导入角色扮演系统
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugins"))
@@ -336,6 +343,26 @@ class XCLRClient(botpy.Client):
                 elif param_name == 'cooldowns' or param_name == 'cooldowns1':
                     kwargs[param_name] = {}
             
+            # 如果插件使用 **kwargs，将额外常用参数一并传入
+            has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+            if has_var_kwargs:
+                extra_params = {
+                    'reminder': self.reminder,
+                    'bot_name': self.bot_name,
+                    'order': order,
+                    'ROOT_User': self.root_users,
+                    'Super_User': [],
+                    'Manage_User': [],
+                    'config': self.config,
+                    'time': __import__('time'),
+                    'cooldowns': {},
+                    'cooldowns1': {},
+                    'plugins': self._plugins,
+                }
+                for key, value in extra_params.items():
+                    if key not in kwargs:
+                        kwargs[key] = value
+            
             # 调用插件
             result = await on_message(**kwargs)
             
@@ -409,6 +436,12 @@ class XCLRClient(botpy.Client):
                 except Exception as e:
                     self._client.logger.error(f"发送文件失败: {e}")
                     await self.send(content=f"发送文件失败: {e}")
+
+            async def send_help_image(self, help_text: str):
+                """发送格式化的 Markdown 帮助文本到当前会话（插件用）"""
+                sent = await client._send_help_image(self._message, help_text)
+                if not sent:
+                    await self.send(content=help_text)
             
             def _extract_text(self, msg):
                 """从消息对象中提取文本"""
@@ -465,6 +498,21 @@ class XCLRClient(botpy.Client):
         
         return PluginActions()
     
+    # ==================== 帮助消息发送 ====================
+
+    async def _send_help_image(self, message, help_text: str) -> bool:
+        """发送格式化的 Markdown 帮助文本到当前会话。"""
+        try:
+            group_openid = getattr(message, 'group_openid', None)
+            if group_openid:
+                await self._send_group_message(message, help_text)
+            else:
+                await self._send_c2c_message(message, help_text)
+            return True
+        except Exception as e:
+            self.logger.error(f"发送帮助消息失败: {e}")
+            return False
+
     # ==================== 单聊消息处理 ====================
     
     async def on_c2c_message_create(self, message: Any):
@@ -493,10 +541,12 @@ class XCLRClient(botpy.Client):
                 await self._send_c2c_message(message, "Ciallo∼(∠・ω[ )⌒☆")
                 return
             
-            # 处理帮助命令
+            # 处理帮助命令（发送图片）
             if content == "帮助" or content == f"{self.reminder}帮助":
                 help_text = self._get_help_text()
-                await self._send_c2c_message(message, help_text)
+                sent = await self._send_help_image(message, help_text)
+                if not sent:
+                    await self._send_c2c_message(message, help_text)
                 return
             
             # 处理状态命令
@@ -507,7 +557,7 @@ class XCLRClient(botpy.Client):
             
             # 处理 AI 对话
             if not self.allow_ai:
-                await self._send_c2c_message(message, f"AI 对话功能暂时关闭，请稍后再试~")
+                await self._send_c2c_message(message, f"未找到相关指令")
                 return
             if content.startswith(self.reminder):
                 order = content[len(self.reminder):].strip()
@@ -604,7 +654,9 @@ class XCLRClient(botpy.Client):
             
             if order == "帮助":
                 help_text = self._get_help_text()
-                await self._send_group_message(message, help_text)
+                sent = await self._send_help_image(message, help_text)
+                if not sent:
+                    await self._send_group_message(message, help_text)
                 return
             
             if order == "状态":
@@ -668,7 +720,9 @@ class XCLRClient(botpy.Client):
             
             if order == "帮助":
                 help_text = self._get_help_text()
-                await self._send_group_message(message, help_text)
+                sent = await self._send_help_image(message, help_text)
+                if not sent:
+                    await self._send_group_message(message, help_text)
                 return
             
             if order == "状态":
@@ -755,15 +809,17 @@ class XCLRClient(botpy.Client):
                 await message.reply(content="Ciallo∼(∠・ω[ )⌒☆")
                 return
             
-            # 处理帮助命令
+            # 处理帮助命令（发送图片）
             if content == "帮助" or content == f"{self.reminder}帮助":
                 help_text = self._get_help_text()
-                await message.reply(markdown={"content": help_text})
+                sent = await self._send_help_image(message, help_text)
+                if not sent:
+                    await message.reply(markdown={"content": help_text})
                 return
             
             # 处理 AI 对话
             if not self.allow_ai:
-                await message.reply(content=f"AI 对话功能暂时关闭，请稍后再试~")
+                await message.reply(content=f"未找到相关指令")
                 return
             if content.startswith(self.reminder):
                 order = content[len(self.reminder):].strip()
@@ -806,10 +862,12 @@ class XCLRClient(botpy.Client):
             
             self.logger.info(f"[频道] 频道 {channel_id} 用户 {user_id}: {content}")
             
-            # 处理空消息
+            # 处理空消息（发送帮助图片）
             if not content:
                 help_text = self._get_help_text()
-                await message.reply(content=help_text)
+                sent = await self._send_help_image(message, help_text)
+                if not sent:
+                    await message.reply(content=help_text)
                 return
             
             # 处理 ping
@@ -817,10 +875,12 @@ class XCLRClient(botpy.Client):
                 await message.reply(content="Ciallo∼(∠・ω[ )⌒☆")
                 return
             
-            # 处理帮助命令
+            # 处理帮助命令（发送图片）
             if content == "帮助" or content == f"{self.reminder}帮助":
                 help_text = self._get_help_text()
-                await message.reply(markdown={"content": help_text})
+                sent = await self._send_help_image(message, help_text)
+                if not sent:
+                    await message.reply(markdown={"content": help_text})
                 return
             
             # 处理状态命令
@@ -831,7 +891,7 @@ class XCLRClient(botpy.Client):
             
             # 处理 AI 对话
             if not self.allow_ai:
-                await message.reply(content=f"AI 对话功能暂时关闭，请稍后再试~")
+                await message.reply(content=f"未找到相关指令")
                 return
             if content.startswith(self.reminder):
                 order = content[len(self.reminder):].strip()
@@ -1205,20 +1265,43 @@ class XCLRClient(botpy.Client):
             return True
         return False
     
+    # 插件分类映射：分类名 -> 该分类下插件名列表
+    PLUGIN_CATEGORIES = [
+        ("🎯 签到系统", ["checkin", "affection"]),
+        ("🌤️ 生活工具", ["weather", "ping", "hitokoto", "domain_whois", "httptest"]),
+        ("🎨 娱乐工具", ["acg_picture", "qr_code", "mc_status"]),
+        ("🎭 角色扮演", ["roleplay"]),
+        ("📺 直播监控", ["kick"]),
+    ]
+
     def _get_help_text(self) -> str:
-        """获取帮助文本"""
-        return f"""## 📖 {self.bot_name} 帮助
+        """动态生成帮助文本"""
+        lines = [f"## 📖 {self.bot_name} 帮助", ""]
+        lines.append("### 💡 群聊指令格式")
+        lines.append("- **@机器人 /指令** - 执行指令")
+        lines.append("")
+        lines.append("### 🎮 内置指令")
+        lines.append("")
+        lines.append("**📋 帮助**")
+        lines.append("- **@机器人 /帮助** - 显示此帮助")
+        lines.append("- **@机器人 /状态** - 查看状态")
+        lines.append("")
 
-### 💡 群聊指令（仅插件）
-- **@机器人 /指令** - 执行插件指令
-- **@机器人 /帮助** - 显示帮助
-- **@机器人 /状态** - 查看状态
-- **@机器人 /ping** - 测试响应
+        # 获取已加载插件的名 -> 帮助信息 映射
+        plugin_help_map = {p['name']: p['help'] for p in self._plugins}
 
-### 🤖 单聊/私信（AI 对话）
-直接发送消息即可与 AI 对话
+        # 分类展示已加载的插件
+        for cat_name, plugin_names in self.PLUGIN_CATEGORIES:
+            matched = {name: plugin_help_map[name] for name in plugin_names if name in plugin_help_map}
+            if not matched:
+                continue
+            lines.append(f"**{cat_name}**")
+            for name, help_msg in matched.items():
+                lines.append(f"- **@机器人 /{help_msg}**")
+            lines.append("")
 
-> 📝 版本: **{self.version_name}**"""
+        lines.append(f"> 📝 版本: **{self.version_name}**")
+        return "\n".join(lines)
     
     def _get_status_text(self) -> str:
         """获取状态文本"""

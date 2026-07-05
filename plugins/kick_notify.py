@@ -16,7 +16,7 @@ _notified: set[str] = set()
 
 
 def _load_config(root_path: str = None) -> dict:
-    """从父项目 config.json 读取 kick_notify 配置"""
+    """从 open-qq/config.json 读取 kick_notify 配置"""
     import os
     config_path = os.path.join(
         root_path or os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
