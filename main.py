@@ -10,18 +10,15 @@ import os
 import sys
 import json
 import logging
-from pathlib import Path
 
-# 获取项目根目录 (open-qq 的父目录)
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OPENQQ_DIR = os.path.dirname(os.path.abspath(__file__))
+# 当前仓库即项目根目录
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # 设置工作目录为项目根目录
 os.chdir(PROJECT_ROOT)
 
-# 将项目根目录和 open-qq 目录添加到 path
+# 将项目根目录添加到 path
 sys.path.insert(0, PROJECT_ROOT)
-sys.path.insert(0, OPENQQ_DIR)
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -43,8 +40,8 @@ import logging as std_logging
 
 
 def load_config() -> dict:
-    """加载 open-qq/config.json 配置文件"""
-    config_path = os.path.join(OPENQQ_DIR, "config.json")
+    """加载项目根目录下的 config.json 配置文件"""
+    config_path = os.path.join(PROJECT_ROOT, "config.json")
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
 

@@ -5,7 +5,7 @@ TRIGGHT_KEYWORD = "Any"
 HELP_MESSAGE = "mc状态 <服务器地址> -> 查询 MC 服务器状态"
 
 DOMAIN = re.compile(r"^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|(?:\d{1,3}\.){3}\d{1,3})(?::\d+)?$")
-KEYWORDS = ["mc状态", "MC状态", "Mc状态", "我的世界状态", "minecraft状态", "java状态", "jv状态", "mcs"]
+KEYWORDS = ["mc状态", "我的世界状态", "minecraft状态", "jv状态"]
 
 
 async def on_message(event, actions, **kwargs):
@@ -13,11 +13,12 @@ async def on_message(event, actions, **kwargs):
     if not msg:
         return False
 
-    if not any(kw in msg for kw in KEYWORDS):
+    msg_lower = msg.lower()
+    if not any(kw.lower() in msg_lower for kw in KEYWORDS):
         return False
 
     for kw in KEYWORDS:
-        msg = msg.replace(kw, "")
+        msg = msg_lower.replace(kw.lower(), "")
     address = msg.strip()
 
     if not address:

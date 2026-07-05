@@ -15,18 +15,15 @@ QQ 开放平台机器人客户端
 import os
 import re
 import sys
-import json
 import asyncio
 import traceback
-import random
-import datetime
 import time
-from typing import Optional, Dict, Any, List, Union
+import inspect
+from typing import Dict, Any
 
 import botpy
 from botpy import logging
-from botpy.message import Message, DirectMessage, GroupMessage
-from botpy.types.message import Ark, Embed, MarkdownPayload
+from botpy.message import Message, DirectMessage
 
 # ==================== botpy 补丁 ====================
 # QQ 开放平台会发送 GROUP_MESSAGE_CREATE 事件，但当前 botpy 版本缺少对应的解析器。
@@ -58,13 +55,13 @@ _BotpyFormData._gen_form_data = _BotpyFormData.__bases__[0]._gen_form_data
 # ==================== 补丁结束 ====================
 
 # 添加项目根目录到路径
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, PROJECT_ROOT)
 
-from core.context import BotContext
-from core.constants import VERSION_NAME, PLUGIN_FOLDER
+from Tools.core import BotContext, VERSION_NAME
 
 # 导入角色扮演系统
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugins"))
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "plugins"))
 try:
     from roleplay import get_role_system_prompt
     ROLEPLAY_ENABLED = True
@@ -72,7 +69,7 @@ except ImportError:
     ROLEPLAY_ENABLED = False
 
 # RAG 记忆管理器
-from rag_memory import RAGMemory
+from Tools.rag_memory import RAGMemory
 
 
 class XCLRClient(botpy.Client):
@@ -127,11 +124,8 @@ class XCLRClient(botpy.Client):
         self._plugins_help = {}
         self._plugins_bg_tasks = []
         
-        # 消息序列号记录 (用于去重)
-        self._msg_seq_cache = {}
-        
         # RAG 记忆
-        self.rag = RAGMemory(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
+        self.rag = RAGMemory(os.path.join(PROJECT_ROOT, "data"))
         
         # 日志
         self.logger = logging.get_logger()
@@ -167,55 +161,79 @@ class XCLRClient(botpy.Client):
         # 启动插件后台任务
         await self._start_plugin_background_tasks()
     
+    @staticmethod
+    def _is_plugin_file(filename: str) -> bool:
+        return filename.endswith(".py") and not filename.startswith(("__", "d_"))
+
+    def _load_plugin_module(self, plugin_dir: str, filename: str):
+        import importlib.util
+
+        plugin_name = filename[:-3]
+        plugin_path = os.path.join(plugin_dir, filename)
+        spec = importlib.util.spec_from_file_location(f"plugins.{plugin_name}", plugin_path)
+        if not spec or not spec.loader:
+            raise ImportError(f"无法创建插件加载规范: {filename}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return plugin_name, module
+
+    def _register_plugin(self, plugin_name: str, module) -> bool:
+        keyword = getattr(module, 'TRIGGHT_KEYWORD', None)
+        help_msg = getattr(module, 'HELP_MESSAGE', '')
+        on_message = getattr(module, 'on_message', None)
+
+        if not keyword or not callable(on_message):
+            return False
+
+        keyword = keyword.strip()
+        self._plugins.append({
+            'name': plugin_name,
+            'keyword': keyword,
+            'help': help_msg,
+            'module': module,
+            'on_message': on_message,
+            'is_any': keyword == 'Any',
+        })
+        self._plugins_help[plugin_name] = help_msg
+        self.logger.info(f"加载插件: {plugin_name} ({keyword})")
+        return True
+
+    def _register_plugin_background_task(self, plugin_name: str, module):
+        bg_tasks = getattr(module, 'background_tasks', None)
+        if callable(bg_tasks):
+            self._plugins_bg_tasks.append({
+                'name': plugin_name,
+                'task': bg_tasks,
+            })
+            self.logger.info(f"插件 {plugin_name} 注册后台任务")
+
     def _load_plugins(self):
         """加载插件"""
-        # 优先加载 open-qq/plugins 目录中的插件
-        plugin_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugins")
+        plugin_dir = os.path.join(PROJECT_ROOT, "plugins")
+        self._plugins.clear()
+        self._plugins_help.clear()
+        self._plugins_bg_tasks.clear()
         
         if not os.path.exists(plugin_dir):
             self.logger.warning(f"插件目录不存在: {plugin_dir}")
             return
         
-        for filename in os.listdir(plugin_dir):
-            if filename.endswith(".py") and not filename.startswith("d_") and not filename.startswith("__"):
-                plugin_name = filename[:-3]
-                try:
-                    # 动态加载插件模块
-                    import importlib.util
-                    plugin_path = os.path.join(plugin_dir, filename)
-                    spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-                    
-                    # 获取插件信息
-                    keyword = getattr(module, 'TRIGGHT_KEYWORD', None)
-                    help_msg = getattr(module, 'HELP_MESSAGE', '')
-                    on_message = getattr(module, 'on_message', None)
-                    
-                    if keyword and on_message:
-                        self._plugins.append({
-                            'name': plugin_name,
-                            'keyword': keyword.strip(),
-                            'help': help_msg,
-                            'module': module,
-                            'on_message': on_message,
-                        })
-                        self._plugins_help[plugin_name] = help_msg
-                        self.logger.info(f"加载插件: {plugin_name}")
-                    else:
-                        self.logger.warning(f"插件 {plugin_name} 缺少必要字段")
-                    
-                    # 检查是否有后台任务
-                    bg_tasks = getattr(module, 'background_tasks', None)
-                    if bg_tasks:
-                        if callable(bg_tasks):
-                            self._plugins_bg_tasks.append({
-                                'name': plugin_name,
-                                'task': bg_tasks,
-                            })
-                            self.logger.info(f"插件 {plugin_name} 注册后台任务")
-                except Exception as e:
-                    self.logger.error(f"加载插件 {plugin_name} 失败: {e}")
+        for filename in sorted(os.listdir(plugin_dir)):
+            if not self._is_plugin_file(filename):
+                continue
+
+            plugin_name = filename[:-3]
+            try:
+                plugin_name, module = self._load_plugin_module(plugin_dir, filename)
+                if not self._register_plugin(plugin_name, module):
+                    self.logger.warning(f"插件 {plugin_name} 缺少 TRIGGHT_KEYWORD 或 on_message")
+                self._register_plugin_background_task(plugin_name, module)
+            except Exception as e:
+                self.logger.error(f"加载插件 {plugin_name} 失败: {e}")
+                self.logger.error(traceback.format_exc())
+
+        self._plugins.sort(key=lambda p: (p['is_any'], -len(p['keyword']), p['name']))
+        self.logger.info(f"插件加载完成: {len(self._plugins)} 个命令插件, {len(self._plugins_bg_tasks)} 个后台任务")
     
     async def _start_plugin_background_tasks(self):
         """启动所有插件的后台任务"""
@@ -235,144 +253,104 @@ class XCLRClient(botpy.Client):
         Returns:
             bool: 是否有插件处理了消息
         """
-        import inspect
+        skip_plugins = skip_plugins or set()
+        order = order.strip()
+        if not order:
+            return False
         
-        if skip_plugins is None:
-            skip_plugins = set()
-        
-        # 先尝试具体关键字的插件，再尝试 "Any" 类型的插件
-        specific_plugins = [p for p in self._plugins if p['keyword'] != 'Any' and p['name'] not in skip_plugins]
-        any_plugins = [p for p in self._plugins if p['keyword'] == 'Any' and p['name'] not in skip_plugins]
-        
-        # 先匹配具体关键字
-        for plugin in specific_plugins:
-            keyword = plugin['keyword']
-            if order.startswith(keyword):
-                self.logger.info(f"[插件] 匹配到插件: {plugin['name']}, 关键字: {keyword}")
-                result = await self._execute_plugin(plugin, message, order)
-                if result:
-                    return True
-        
-        # 再尝试 "Any" 类型的插件
-        for plugin in any_plugins:
-            self.logger.info(f"[插件] 尝试插件: {plugin['name']}, 关键字: Any")
+        for plugin in self._plugins:
+            if plugin['name'] in skip_plugins:
+                continue
+            if not plugin['is_any'] and not order.startswith(plugin['keyword']):
+                continue
+
+            log_action = "尝试" if plugin['is_any'] else "匹配到"
+            self.logger.info(f"[插件] {log_action}插件: {plugin['name']}, 关键字: {plugin['keyword']}")
             result = await self._execute_plugin(plugin, message, order)
             if result:
                 return True
         
         return False
+
+    def _create_plugin_compat_objects(self):
+        class FakeManager:
+            class Message:
+                def __init__(self, *args):
+                    self.parts = args
+                def __iter__(self):
+                    return iter(self.parts)
+        
+        class FakeSegments:
+            class Text:
+                def __init__(self, text):
+                    self.text = str(text)
+                def __str__(self):
+                    return self.text
+            
+            class At:
+                def __init__(self, user_id):
+                    self.user_id = user_id
+                def __str__(self):
+                    return f"@{self.user_id}"
+            
+            class Image:
+                def __init__(self, url):
+                    self.url = url
+                    self.file = url
+            
+            class Reply:
+                def __init__(self, msg_id):
+                    self.id = msg_id
+
+        class FakeEvents:
+            class GroupMessageEvent: pass
+            class PrivateMessageEvent: pass
+
+        return FakeManager, FakeSegments, FakeEvents
+
+    def _build_plugin_kwargs(self, plugin: dict, message: Any, order: str) -> dict:
+        adapted_event = self._adapt_message_for_plugin(message, order)
+        actions = self._create_plugin_actions(message)
+        manager, segments, events = self._create_plugin_compat_objects()
+        cooldowns = {}
+
+        available = {
+            'event': adapted_event,
+            'actions': actions,
+            'Manager': manager,
+            'Segments': segments,
+            'Events': events,
+            'reminder': self.reminder,
+            'bot_name': self.bot_name,
+            'order': order,
+            'ROOT_User': self.root_users,
+            'Super_User': [],
+            'Manage_User': [],
+            'config': self.config,
+            'time': time,
+            'cooldowns': cooldowns,
+            'cooldowns1': cooldowns,
+            'plugins': self._plugins,
+            'plugin_categories': self.PLUGIN_CATEGORIES,
+        }
+
+        sig = inspect.signature(plugin['on_message'])
+        kwargs = {name: available[name] for name in sig.parameters if name in available}
+        has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        if has_var_kwargs:
+            kwargs.update({key: value for key, value in available.items() if key not in kwargs})
+        return kwargs
     
     async def _execute_plugin(self, plugin: dict, message: Any, order: str) -> bool:
         """执行单个插件"""
-        import inspect
-        
         try:
-            # 创建适配的事件对象
-            adapted_event = self._adapt_message_for_plugin(message, order)
-            
-            # 获取插件函数签名
-            on_message = plugin['on_message']
-            sig = inspect.signature(on_message)
-            param_names = list(sig.parameters.keys())
-            
-            # 构建参数
-            kwargs = {}
-            
-            # 创建模拟的 Manager 和 Segments
-            class FakeManager:
-                class Message:
-                    def __init__(self, *args):
-                        self.parts = args
-                    def __iter__(self):
-                        return iter(self.parts)
-            
-            class FakeSegments:
-                class Text:
-                    def __init__(self, text):
-                        self.text = str(text)
-                    def __str__(self):
-                        return self.text
-                
-                class At:
-                    def __init__(self, user_id):
-                        self.user_id = user_id
-                    def __str__(self):
-                        return f"@{self.user_id}"
-                
-                class Image:
-                    def __init__(self, url):
-                        self.url = url
-                        self.file = url
-                
-                class Reply:
-                    def __init__(self, msg_id):
-                        self.id = msg_id
-            
-            # 根据参数名传递对应的值
-            for param_name in param_names:
-                if param_name == 'event':
-                    kwargs['event'] = adapted_event
-                elif param_name == 'actions':
-                    kwargs['actions'] = self._create_plugin_actions(message)
-                elif param_name == 'Manager':
-                    kwargs['Manager'] = FakeManager
-                elif param_name == 'Segments':
-                    kwargs['Segments'] = FakeSegments
-                elif param_name == 'Events':
-                    class FakeEvents:
-                        class GroupMessageEvent: pass
-                        class PrivateMessageEvent: pass
-                    kwargs['Events'] = FakeEvents
-                elif param_name == 'reminder':
-                    kwargs['reminder'] = self.reminder
-                elif param_name == 'bot_name':
-                    kwargs['bot_name'] = self.bot_name
-                elif param_name == 'order':
-                    kwargs['order'] = order
-                elif param_name == 'ROOT_User':
-                    kwargs['ROOT_User'] = self.root_users
-                elif param_name == 'Super_User':
-                    kwargs['Super_User'] = []
-                elif param_name == 'Manage_User':
-                    kwargs['Manage_User'] = []
-                elif param_name == 'config':
-                    kwargs['config'] = self.config
-                elif param_name == 'time':
-                    import time
-                    kwargs['time'] = time
-                elif param_name == 'cooldowns' or param_name == 'cooldowns1':
-                    kwargs[param_name] = {}
-            
-            # 如果插件使用 **kwargs，将额外常用参数一并传入
-            has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
-            if has_var_kwargs:
-                extra_params = {
-                    'reminder': self.reminder,
-                    'bot_name': self.bot_name,
-                    'order': order,
-                    'ROOT_User': self.root_users,
-                    'Super_User': [],
-                    'Manage_User': [],
-                    'config': self.config,
-                    'time': __import__('time'),
-                    'cooldowns': {},
-                    'cooldowns1': {},
-                    'plugins': self._plugins,
-                }
-                for key, value in extra_params.items():
-                    if key not in kwargs:
-                        kwargs[key] = value
-            
-            # 调用插件
-            result = await on_message(**kwargs)
-            
+            result = await plugin['on_message'](**self._build_plugin_kwargs(plugin, message, order))
             if result:
                 self.logger.info(f"[插件] {plugin['name']} 处理了消息")
                 return True
             return False
         except Exception as e:
             self.logger.error(f"执行插件 {plugin['name']} 错误: {e}")
-            import traceback
             self.logger.error(traceback.format_exc())
             return False
     
@@ -908,114 +886,59 @@ class XCLRClient(botpy.Client):
     
     # ==================== AI 对话处理 ====================
     
+    def _build_ai_system_prompt(self, user_id: str, user_name: str, order: str) -> str:
+        """生成 AI 系统提示并拼接相关历史记忆"""
+        if ROLEPLAY_ENABLED:
+            sys_prompt = get_role_system_prompt(user_id, self.bot_name, user_name)
+        else:
+            from prerequisites.prerequisite import gen_presets
+            sys_prompt = gen_presets(user_id, self.bot_name, self.bot_name_en, user_name)
+
+        rag_context = self.rag.get_relevant_context(user_id, order)
+        if rag_context:
+            sys_prompt = f"{sys_prompt}\n\n{rag_context}"
+        return sys_prompt
+
+    async def _run_ai_chat(self, user_id: str, user_name: str, order: str) -> str:
+        sys_prompt = self._build_ai_system_prompt(user_id, user_name, order)
+        result = await self._simple_ai_call(order, sys_prompt, user_id)
+        if result:
+            asyncio.create_task(self._store_exchange(user_id, order, result))
+        return result
+
     async def _handle_ai_chat_c2c(self, message: Any, order: str):
-        """
-        处理单聊 AI 对话
-        
-        Args:
-            message: 消息对象
-            order: 用户问题
-        """
+        """处理单聊 AI 对话"""
         try:
-            # 获取用户信息
-            user_openid = message.author.user_openid
-            
-            # 生成预设 - 优先使用角色系统
-            if ROLEPLAY_ENABLED:
-                sys_prompt = get_role_system_prompt(user_openid, self.bot_name, "用户")
-            else:
-                from prerequisites.prerequisite import gen_presets
-                sys_prompt = gen_presets(user_openid, self.bot_name, self.bot_name_en, "用户")
-            
-            # RAG 检索相关历史
-            rag_context = self.rag.get_relevant_context(user_openid, order)
-            if rag_context:
-                sys_prompt = f"{sys_prompt}\n\n{rag_context}"
-            
-            # 生成回复
-            result = await self._simple_ai_call(order, sys_prompt, user_openid)
-            
-            # 发送回复 (使用 Markdown 格式)
+            result = await self._run_ai_chat(message.author.user_openid, "用户", order)
             if result:
                 await self._send_c2c_message(message, result)
-                # 异步存储本轮对话（不阻塞回复）
-                asyncio.create_task(self._store_exchange(user_openid, order, result))
-            
         except TimeoutError:
             await self._send_c2c_message(message, f"😅 哎呀，你问的问题太复杂了，**{self.bot_name}** 想不出来了 ┭┮﹏┭┮")
-        except Exception as e:
+        except Exception:
             self.logger.error(f"单聊 AI 对话错误: {traceback.format_exc()}")
             await self._send_c2c_message(message, f"😵 **{self.bot_name}** 发生错误了，请稍后再试 ε(┬┬﹏┬┬)3")
     
     async def _handle_ai_chat_dms(self, message: DirectMessage, order: str):
-        """
-        处理频道私信 AI 对话
-        
-        Args:
-            message: 私信消息对象
-            order: 用户问题
-        """
+        """处理频道私信 AI 对话"""
         try:
-            user_id = message.author.id
-            user_name = message.author.username
-            
-            # 生成预设 - 优先使用角色系统
-            if ROLEPLAY_ENABLED:
-                sys_prompt = get_role_system_prompt(user_id, self.bot_name, user_name)
-            else:
-                from prerequisites.prerequisite import gen_presets
-                sys_prompt = gen_presets(user_id, self.bot_name, self.bot_name_en, user_name)
-            
-            # RAG 检索相关历史
-            rag_context = self.rag.get_relevant_context(user_id, order)
-            if rag_context:
-                sys_prompt = f"{sys_prompt}\n\n{rag_context}"
-            
-            result = await self._simple_ai_call(order, sys_prompt, user_id)
-            
+            result = await self._run_ai_chat(message.author.id, message.author.username, order)
             if result:
                 await message.reply(markdown={"content": result})
-                asyncio.create_task(self._store_exchange(user_id, order, result))
-                
         except TimeoutError:
             await message.reply(markdown={"content": f"😅 哎呀，你问的问题太复杂了，**{self.bot_name}** 想不出来了 ┭┮﹏┭┮"})
-        except Exception as e:
+        except Exception:
             self.logger.error(f"频道私信 AI 对话错误: {traceback.format_exc()}")
             await message.reply(markdown={"content": f"😵 **{self.bot_name}** 发生错误了，请稍后再试"})
     
     async def _handle_ai_chat_channel(self, message: Message, order: str):
-        """
-        处理频道 AI 对话
-        
-        Args:
-            message: 消息对象
-            order: 用户问题
-        """
+        """处理频道 AI 对话"""
         try:
-            user_id = message.author.id
-            user_name = message.author.username
-            
-            # 生成预设 - 优先使用角色系统
-            if ROLEPLAY_ENABLED:
-                sys_prompt = get_role_system_prompt(user_id, self.bot_name, user_name)
-            else:
-                from prerequisites.prerequisite import gen_presets
-                sys_prompt = gen_presets(user_id, self.bot_name, self.bot_name_en, user_name)
-            
-            # RAG 检索相关历史
-            rag_context = self.rag.get_relevant_context(user_id, order)
-            if rag_context:
-                sys_prompt = f"{sys_prompt}\n\n{rag_context}"
-            
-            result = await self._simple_ai_call(order, sys_prompt, user_id)
-            
+            result = await self._run_ai_chat(message.author.id, message.author.username, order)
             if result:
                 await message.reply(markdown={"content": result})
-                asyncio.create_task(self._store_exchange(user_id, order, result))
-                
         except TimeoutError:
             await message.reply(markdown={"content": f"😅 哎呀，你问的问题太复杂了，**{self.bot_name}** 想不出来了 ┭┮﹏┭┮"})
-        except Exception as e:
+        except Exception:
             self.logger.error(f"频道 AI 对话错误: {traceback.format_exc()}")
             await message.reply(markdown={"content": f"😵 **{self.bot_name}** 发生错误了，请稍后再试 ε(┬┬﹏┬┬)3"})
     
@@ -1076,26 +999,6 @@ class XCLRClient(botpy.Client):
         self.logger.info(f"好友删除: {user.user_openid if hasattr(user, 'user_openid') else 'unknown'}")
     
     # ==================== 工具方法 ====================
-    
-    def _adapt_message_for_ai(self, message: Any, content: str):
-        """
-        将 QQ 开放平台消息对象适配为 AI 模块可用的格式
-        
-        Args:
-            message: 原始消息对象
-            content: 消息内容
-            
-        Returns:
-            适配后的消息对象
-        """
-        class AdaptedMessage:
-            def __init__(self, msg, text):
-                self.message = [type('TextMsg', (), {'text': text, '__str__': lambda s: text})]
-                self.user_id = getattr(msg.author, 'user_openid', None) or getattr(msg.author, 'member_openid', 'unknown')
-                self.group_id = getattr(msg, 'group_openid', None)
-                self.message_id = getattr(msg, 'id', None)
-                self.self_id = None
-        return AdaptedMessage(message, content)
     
     async def _simple_ai_call(self, question: str, sys_prompt: str, user_id: str) -> str:
         """

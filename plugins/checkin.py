@@ -12,19 +12,26 @@ TRIGGHT_KEYWORD = "签到"
 HELP_MESSAGE = "签到 -> 签到获取积分和好感度"
 
 # 数据文件路径
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "check_in", "users")
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "checkin")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
 def _load_data(user_id: str) -> dict:
     """加载用户签到数据"""
     file_path = os.path.join(DATA_DIR, f"{user_id}.json")
-    defaults = {"total_days": 0, "好感度": 0, "积分": 0, "last_check": ""}
+    defaults = {"points": 0, "affection": 0, "last_checkin": None, "streak": 0}
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        for k, v in defaults.items():
-            data.setdefault(k, v)
+        if "积分" in data or "好感度" in data or "last_check" in data:
+            data = {
+                "points": data.get("points", data.get("积分", 0)),
+                "affection": data.get("affection", data.get("好感度", 0)),
+                "last_checkin": data.get("last_checkin", data.get("last_check")),
+                "streak": data.get("streak", data.get("total_days", 0)),
+            }
+        for key, value in defaults.items():
+            data.setdefault(key, value)
         return data
     return defaults.copy()
 
@@ -44,7 +51,7 @@ def _get_daily_rank(today: str) -> int:
             with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
                 try:
                     data = json.load(f)
-                    if data.get("last_check") == today:
+                    if data.get("last_checkin") == today:
                         count += 1
                 except (json.JSONDecodeError, OSError):
                     continue
@@ -71,12 +78,12 @@ async def on_message(event, actions, **kwargs):
     data = _load_data(user_id)
 
     # 检查是否已签到
-    if data["last_check"] == today:
+    if data["last_checkin"] == today:
         msg = (
             f"## 你今天已经签到过了哦~\n"
             f"\n"
-            f"- 当前好感度：**{data['好感度']}**\n"
-            f"- 当前积分：**{data['积分']}**"
+            f"- 当前好感度：**{data['affection']}**\n"
+            f"- 当前积分：**{data['points']}**"
         )
         await actions.send(markdown={"content": msg})
         return True
@@ -89,10 +96,10 @@ async def on_message(event, actions, **kwargs):
     points = random.randint(10, 100)   # 积分
 
     # 更新数据
-    data["total_days"] += 1
-    data["好感度"] += favor
-    data["积分"] += points
-    data["last_check"] = today
+    data["streak"] = data.get("streak", 0) + 1
+    data["affection"] += favor
+    data["points"] += points
+    data["last_checkin"] = today
     _save_data(user_id, data)
 
     # 获取一言
@@ -105,10 +112,10 @@ async def on_message(event, actions, **kwargs):
         f"\n"
         f"| 项目 | 增加值 | 累计 |\n"
         f"| :--- | :----: | :--: |\n"
-        f"| 好感度 | +{favor} | {data['好感度']} |\n"
-        f"| 积分 | +{points} | {data['积分']} |\n"
+        f"| 好感度 | +{favor} | {data['affection']} |\n"
+        f"| 积分 | +{points} | {data['points']} |\n"
         f"\n"
-        f"> 累计签到 **{data['total_days']}** 天\n"
+        f"> 累计签到 **{data['streak']}** 天\n"
         f"---\n"
         f"> {hitokoto_text}"
     )

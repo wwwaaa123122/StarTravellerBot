@@ -5,24 +5,8 @@
 - 管理员可手动触发群发：早生蚝 或 早生蚝 <自定义内容>
 """
 
-import os
-import json
 import asyncio
 from datetime import datetime, timezone, timedelta
-
-# 读取本项目 (open-qq/) 下的 config.json
-_local_config = None
-
-
-def _get_local_config():
-    global _local_config
-    if _local_config is None:
-        config_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json"
-        )
-        with open(config_path, "r", encoding="utf-8") as f:
-            _local_config = json.load(f)
-    return _local_config
 
 # 北京时间 (UTC+8)
 BJT = timezone(timedelta(hours=8))
@@ -54,8 +38,9 @@ async def on_message(event, actions, **kwargs):
     """处理手动群发命令：群发 <内容>"""
     order = kwargs.get("order", "")
     user_id = str(getattr(event, "user_id", ""))
+    config = kwargs.get("config", {})
 
-    cfg = _get_local_config().get("scheduled_send", {})
+    cfg = config.get("scheduled_send", {})
     admin_user = cfg.get("admin_user", "")
 
     # 仅 config 中指定的 admin_user 可触发
@@ -87,7 +72,8 @@ async def background_tasks(client):
     """定时群发后台任务 - 每天 06:00 发送早间问候"""
     await asyncio.sleep(3)
 
-    cfg = _get_local_config().get("scheduled_send", {})
+    config = getattr(client, 'config', {}) or {}
+    cfg = config.get("scheduled_send", {})
     send_time = cfg.get("send_time", "06:00")
     default_content = cfg.get("default_content", "早生蚝")
     notify_groups = cfg.get("notify_groups", [])

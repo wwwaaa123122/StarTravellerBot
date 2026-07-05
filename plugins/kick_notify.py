@@ -15,18 +15,6 @@ HELP_MESSAGE = "Kick 开播监控 (channel: xctraveller, 间隔60秒)"
 _notified: set[str] = set()
 
 
-def _load_config(root_path: str = None) -> dict:
-    """从 open-qq/config.json 读取 kick_notify 配置"""
-    import os
-    config_path = os.path.join(
-        root_path or os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "config.json",
-    )
-    with open(config_path, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
-    return cfg.get("kick_notify", {})
-
-
 def _check_live(channel: str) -> tuple[bool, dict | None]:
     """检查 Kick 主播是否在播。"""
     url = f"https://api.kick.com/private/v1/channels/{channel}/livestream"
@@ -100,7 +88,8 @@ async def background_tasks(client):
     # 等待 bot 完全就绪
     await asyncio.sleep(3)
 
-    cfg = _load_config()
+    config = getattr(client, 'config', {}) or {}
+    cfg = config.get("kick_notify", {})
     channel = cfg.get("channel", "xctraveller")
     interval = cfg.get("check_interval", 60)
     notify_groups = cfg.get("notify_groups", [])
