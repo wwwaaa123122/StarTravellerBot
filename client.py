@@ -407,35 +407,28 @@ class XCLRClient(botpy.Client):
                     await self.send(content=f"发送文件失败: {e}")
 
             async def send_local_file(self, file_path: str, file_type: int = 1):
-                """发送本地文件（上传到临时存储后发送）"""
-                import httpx
-                upload_urls = [
-                    "https://envs.sh",
-                    "https://0x0.st",
-                ]
+                """发送本地文件（base64 编码直接上传）"""
                 try:
-                    mime_map = {1: "image/png", 2: "video/mp4", 3: "audio/wav"}
-                    mime = mime_map.get(file_type, "application/octet-stream")
-                    file_name = os.path.basename(file_path)
                     with open(file_path, "rb") as f:
-                        data = f.read()
-                    for upload_url in upload_urls:
-                        try:
-                            async with httpx.AsyncClient(timeout=30) as client:
-                                resp = await client.post(
-                                    upload_url,
-                                    files={"file": (file_name, data, mime)},
-                                )
-                                if resp.status_code == 200:
-                                    url = resp.text.strip()
-                                    await self.send_file(url, file_type=file_type)
-                                    return
-                        except Exception:
-                            continue
-                    self._client.logger.warning(f"本地文件上传失败: {file_path}")
+                        file_bytes = f.read()
+                    from botpy.http import Route
+                    group_openid = getattr(self._message, 'group_openid', None)
+                    if group_openid:
+                        route = Route("POST", "/v2/groups/{group_openid}/files", group_openid=group_openid)
+                        await self._client.api._http.request(route, json={
+                            "file_image": file_bytes,
+                            "file_type": file_type,
+                            "srv_send_msg": True,
+                        })
+                    else:
+                        route = Route("POST", "/v2/users/{openid}/files", openid=self._message.author.user_openid)
+                        await self._client.api._http.request(route, json={
+                            "file_image": file_bytes,
+                            "file_type": file_type,
+                            "srv_send_msg": True,
+                        })
                 except Exception as e:
                     self._client.logger.error(f"发送本地文件失败: {e}")
-                    await self.send(content=f"发送本地文件失败: {e}")
 
             async def send_help_image(self, help_text: str):
                 sent = await client._send_help_image(self._message, help_text)
