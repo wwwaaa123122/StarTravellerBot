@@ -10,13 +10,17 @@ from typing import Dict, List, Optional, Any
 TRIGGHT_KEYWORD = "whois"
 HELP_MESSAGE = "whois <域名> -> 查询域名注册信息（含中文翻译）"
 
+import logging
+
+_logger = logging.getLogger("Whois")
+
 # 尝试导入 whois 模块
 try:
     import whois as whois_module
     WHOIS_AVAILABLE = True
 except ImportError:
     WHOIS_AVAILABLE = False
-    print("[Whois] 警告: python-whois 未安装")
+    _logger.warning("python-whois 未安装")
 
 
 def _extract_contact_info(w) -> Dict[str, Any]:
@@ -207,9 +211,9 @@ async def on_message(event, actions, **kwargs):
 
     # 执行查询
     try:
-        print(f"[Whois] 正在查询: {domain}")
+        _logger.info(f"正在查询: {domain}")
         result = await asyncio.get_running_loop().run_in_executor(None, _format_whois_info, domain)
-        print(f"[Whois] 查询完成，结果长度: {len(result)}")
+        _logger.info(f"查询完成，结果长度: {len(result)}")
 
         # 限制输出长度，避免刷屏
         if len(result) > 1500:
@@ -217,7 +221,7 @@ async def on_message(event, actions, **kwargs):
 
         await actions.send(content=result)
     except Exception as e:
-        print(f"[Whois] 查询失败: {e}")
-        await actions.send(content=f"❌ 查询失败: {str(e)}")
+        _logger.error(f"查询失败: {e}")
+        await actions.send(content="❌ 查询失败，请稍后重试")
     
     return True

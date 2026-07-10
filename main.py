@@ -73,8 +73,9 @@ def main():
     
     # 启动信息
     bot_name = config.get("Others", {}).get("bot_name", "星辰旅人")
-    version = "3.1 - Next Release"
-    
+    from Tools.core import VERSION_NAME
+    version = VERSION_NAME
+
     print(f"""
 ╔══════════════════════════════════════════════════════════════════╗
 ║                    {bot_name} - QQ 开放平台机器人                ║
@@ -83,10 +84,11 @@ def main():
 """)
     
     # 创建客户端
+    is_sandbox = config.get("OpenQQ", {}).get("sandbox", False)
     client = XCLRClient(
         config=config,
         log_level=log_level_value,
-        is_sandbox=False,  # 沙箱环境
+        is_sandbox=is_sandbox,
     )
     
     # 运行机器人

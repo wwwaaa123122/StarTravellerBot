@@ -6,13 +6,29 @@
 """
 
 import asyncio
+import os
+import json
 from datetime import datetime, timezone, timedelta
 
 # 北京时间 (UTC+8)
 BJT = timezone(timedelta(hours=8))
 
-# 记录当天是否已发送过定时消息
-_sent_today = False
+# 持久化文件，记录当天是否已发送过定时消息
+_SENT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "scheduled_sent.json")
+os.makedirs(os.path.dirname(_SENT_FILE), exist_ok=True)
+
+
+def _load_sent() -> str:
+    try:
+        with open(_SENT_FILE, "r", encoding="utf-8") as f:
+            return json.load(f).get("date", "")
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return ""
+
+
+def _save_sent(date: str):
+    with open(_SENT_FILE, "w", encoding="utf-8") as f:
+        json.dump({"date": date}, f)
 
 
 async def _send_to_groups(client, content: str, notify_groups: list):
@@ -61,7 +77,7 @@ async def on_message(event, actions, **kwargs):
 
     await actions.send(content=f"正在向 {len(notify_groups)} 个群发送: {content}")
 
-    client = getattr(actions, "_client", None)
+    client = kwargs.get("client")
     if client:
         await _send_to_groups(client, content, notify_groups)
 
@@ -86,18 +102,17 @@ async def background_tasks(client):
         f"[scheduled_send] 定时群发已启动，时间: {send_time}，内容: {default_content}"
     )
 
-    global _sent_today
     target_hour, target_minute = map(int, send_time.split(":"))
 
     while True:
         now = datetime.now(BJT)
+        today_str = now.strftime("%Y-%m-%d")
+        sent_date = _load_sent()
 
-        if now.hour == target_hour and now.minute == target_minute and not _sent_today:
+        if now.hour == target_hour and now.minute == target_minute and sent_date != today_str:
             client.logger.info(f"[scheduled_send] 执行定时群发: {default_content}")
             await _send_to_groups(client, default_content, notify_groups)
-            _sent_today = True
-        elif now.hour != target_hour or now.minute != target_minute:
-            _sent_today = False
+            _save_sent(today_str)
 
         await asyncio.sleep(30)
 

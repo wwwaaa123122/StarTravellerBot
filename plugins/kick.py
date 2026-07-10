@@ -9,15 +9,19 @@ import json
 import asyncio
 import threading
 import time
+import logging
 import urllib.request
 import urllib.error
+
+_logger = logging.getLogger("KickPlugin")
 
 TRIGGHT_KEYWORD = "kick"
 HELP_MESSAGE = "kick <主播名> -> 查询 Kick 主播直播状态 | kick help 查看更多"
 
 # 配置文件路径
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kick_config.json")
-LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "kick.log")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_FILE = os.path.join(BASE_DIR, "plugins", "kick_config.json")
+LOG_FILE = os.path.join(BASE_DIR, "data", "kick.log")
 
 # 全局变量
 _monitor_thread = None
@@ -41,7 +45,7 @@ def _load_config() -> dict:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"[Kick插件] 加载配置失败: {e}")
+            _logger.error(f"加载配置失败: {e}")
     
     return default_config
 
@@ -53,7 +57,7 @@ def _save_config(config: dict) -> bool:
             json.dump(config, f, ensure_ascii=False, indent=4)
         return True
     except Exception as e:
-        print(f"[Kick插件] 保存配置失败: {e}")
+        _logger.error(f"保存配置失败: {e}")
         return False
 
 
@@ -88,7 +92,7 @@ def _check_live_sync(channel: str) -> tuple:
                 return (False, livestream)
             return (False, None)
     except Exception as e:
-        print(f"[Kick插件] 检查 {channel} 失败: {e}")
+        _logger.warning(f"检查 {channel} 失败: {e}")
         return (True, None)
 
 
@@ -135,15 +139,15 @@ async def _sender_loop():
                     content=content,
                     msg_seq=str(int(time.time() * 1000000) % 100000000),
                 )
-                print(f"[Kick插件] 已发送到群 {group_openid}")
+                _logger.info(f"已发送到群 {group_openid}")
             except Exception as e:
-                print(f"[Kick插件] 发送到群 {group_openid} 失败: {e}")
+                _logger.error(f"发送到群 {group_openid} 失败: {e}")
             finally:
                 _send_queue.task_done()
         except asyncio.CancelledError:
             break
         except Exception as e:
-            print(f"[Kick插件] sender 异常: {e}")
+            _logger.error(f"sender 异常: {e}")
             await asyncio.sleep(1)
 
 
@@ -211,7 +215,7 @@ def _monitor_loop():
     """监控主循环"""
     global _notified, _monitor_running
 
-    print("[Kick插件] 监控线程启动")
+    _logger.info("监控线程启动")
 
     while _monitor_running:
         try:
@@ -237,14 +241,14 @@ def _monitor_loop():
                         _broadcast_to_groups(notify_groups, message)
                         _notified.add(channel)
                         _write_log("开播", f"{channel} | 标题={title} 观众={viewers}")
-                        print(f"[Kick插件] {channel} 开播了")
+                        _logger.info(f"{channel} 开播了")
                 else:
                     if channel in _notified:
                         message = f"⚫ {channel} 下播了\n链接: https://kick.com/{channel}"
                         _broadcast_to_groups(notify_groups, message)
                         _notified.discard(channel)
                         _write_log("下播", channel)
-                        print(f"[Kick插件] {channel} 下播了")
+                        _logger.info(f"{channel} 下播了")
 
             stale = _notified - set(streamers)
             for ch in stale:
@@ -252,10 +256,10 @@ def _monitor_loop():
 
             time.sleep(interval)
         except Exception as e:
-            print(f"[Kick插件] 监控循环错误: {e}")
+            _logger.error(f"监控循环错误: {e}")
             time.sleep(30)
 
-    print("[Kick插件] 监控线程停止")
+    _logger.info("监控线程停止")
 
 
 def _start_monitor():
@@ -283,8 +287,8 @@ async def on_message(event, actions, **kwargs):
     global _client, _send_queue, _sender_task
     
     # 保存 client 引用，初始化发送队列和 sender task
-    if hasattr(actions, '_client'):
-        _client = actions._client
+    _client = kwargs.get("client")
+    if _client:
         if _send_queue is None:
             _send_queue = asyncio.Queue()
         if _sender_task is None or _sender_task.done():
@@ -555,7 +559,7 @@ def _auto_start():
     """自动启动监控"""
     config = _load_config()
     if config.get("streamers") and config.get("notify_groups"):
-        print(f"[Kick插件] 检测到配置，自动启动监控")
+        _logger.info(f"检测到配置，自动启动监控")
         _start_monitor()
 
 # 延迟启动

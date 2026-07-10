@@ -4,6 +4,7 @@
 import json
 import os
 import random
+import threading
 from datetime import datetime
 
 import httpx
@@ -14,6 +15,44 @@ HELP_MESSAGE = "签到 -> 签到获取积分和好感度"
 # 数据文件路径
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "checkin")
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# 每日排名计数器（避免遍历所有文件）
+_rank_lock = threading.Lock()
+_rank_cache: dict[str, int] = {}
+_RANK_CACHE_FILE = os.path.join(DATA_DIR, "_rank_cache.json")
+
+
+def _load_rank_cache() -> dict[str, int]:
+    if os.path.exists(_RANK_CACHE_FILE):
+        try:
+            with open(_RANK_CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def _save_rank_cache(cache: dict):
+    with open(_RANK_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False)
+
+
+def _init_rank_cache(today: str):
+    """重建当日排名缓存"""
+    count = 0
+    for filename in os.listdir(DATA_DIR):
+        if filename == "_rank_cache.json" or not filename.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("last_checkin") == today:
+                    count += 1
+        except (json.JSONDecodeError, OSError):
+            continue
+    _rank_cache[today] = count
+    _save_rank_cache(_rank_cache)
+    return count
 
 
 def _load_data(user_id: str) -> dict:
@@ -44,18 +83,16 @@ def _save_data(user_id: str, data: dict):
 
 
 def _get_daily_rank(today: str) -> int:
-    """获取今天第几名签到"""
-    count = 0
-    for filename in os.listdir(DATA_DIR):
-        if filename.endswith(".json"):
-            with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
-                try:
-                    data = json.load(f)
-                    if data.get("last_checkin") == today:
-                        count += 1
-                except (json.JSONDecodeError, OSError):
-                    continue
-    return count + 1
+    """获取今天第几名签到（使用缓存，避免遍历所有文件）"""
+    global _rank_cache
+    with _rank_lock:
+        if today not in _rank_cache:
+            _rank_cache = _load_rank_cache()
+            if today not in _rank_cache:
+                _init_rank_cache(today)
+        _rank_cache[today] = _rank_cache.get(today, 0) + 1
+        _save_rank_cache(_rank_cache)
+    return _rank_cache[today]
 
 
 async def _fetch_hitokoto() -> str:

@@ -6,8 +6,11 @@ Kick 开播提醒 - QQ 开放平台插件
 
 import json
 import asyncio
+import logging
 import urllib.request
 import urllib.error
+
+_logger = logging.getLogger("KickNotify")
 
 HELP_MESSAGE = "Kick 开播监控 (channel: xctraveller, 间隔60秒)"
 
@@ -30,7 +33,7 @@ def _check_live(channel: str) -> tuple[bool, dict | None]:
                 return (False, livestream)
             return (False, None)
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError) as e:
-        print(f"[kick_notify] 检查 {channel} 失败: {e}")
+        _logger.warning(f"检查 {channel} 失败: {e}")
         return (True, None)
 
 
