@@ -117,6 +117,9 @@ class XCLRClient(botpy.Client):
         # RAG 记忆
         self.rag = RAGMemory(os.path.join(PROJECT_ROOT, "data"))
 
+        # 日志
+        self.logger = logging.get_logger()
+
         # 角色管理器
         self.role_manager = RoleManager()
 
@@ -131,9 +134,6 @@ class XCLRClient(botpy.Client):
             bot_username=self.bot_name_en,
             role_manager=self.role_manager,
         )
-
-        # 日志
-        self.logger = logging.get_logger()
 
     @property
     def http_client(self) -> httpx.AsyncClient:

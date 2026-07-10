@@ -32,6 +32,11 @@ class RAGMemory:
         with open(self._path(user_id), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
+    def clear_user_history(self, user_id: str):
+        path = self._path(user_id)
+        if os.path.exists(path):
+            os.remove(path)
+
     def _tokenize(self, text: str) -> List[str]:
         text = text.lower()
         return [text[i:i+2] for i in range(len(text) - 1)]
