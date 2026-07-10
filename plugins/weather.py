@@ -2,6 +2,9 @@
 """天气插件 - 适配 QQ 开放平台"""
 
 import httpx
+import logging
+_logger = logging.getLogger("weather")
+import logging
 
 TRIGGHT_KEYWORD = "天气"
 HELP_MESSAGE = "天气 <城市> -> 查询天气信息"
@@ -123,5 +126,6 @@ async def on_message(event, actions, **kwargs):
             return True
             
     except Exception as e:
-        await actions.send(content=f"查询天气出错: {str(e)}")
+        _logger.error(f"天气查询失败 ({city}): {e}")
+        await actions.send(content="查询天气出错，请稍后重试")
         return True

@@ -3,6 +3,9 @@
 
 import json
 import os
+import logging
+_logger = logging.getLogger("affection")
+import logging
 
 TRIGGHT_KEYWORD = "好感度"
 HELP_MESSAGE = "好感度 -> 查询好感度信息"

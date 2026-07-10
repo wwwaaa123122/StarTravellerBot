@@ -2,6 +2,8 @@
 """帮助插件 - 适配 QQ 开放平台"""
 
 TRIGGHT_KEYWORD = "帮助"
+import logging
+_logger = logging.getLogger("help")
 HELP_MESSAGE = "帮助 -> 显示帮助信息"
 
 def _build_help_text(bot_name: str, plugins: list, plugin_categories: list = None) -> str:

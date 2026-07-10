@@ -1,5 +1,8 @@
 import re
 import aiohttp
+import logging
+_logger = logging.getLogger("mc_status")
+import logging
 
 TRIGGHT_KEYWORD = "Any"
 HELP_MESSAGE = "mc状态 <服务器地址> -> 查询 MC 服务器状态"
@@ -38,7 +41,8 @@ async def on_message(event, actions, **kwargs):
                     return True
                 data = await resp.json()
     except Exception as e:
-        await actions.send(content=f"发生错误：{e}")
+        _logger.error(f"MC 状态查询失败 ({address}): {e}")
+        await actions.send(content="查询失败，请稍后重试")
         return True
 
     if not data.get("online"):

@@ -5,6 +5,9 @@ import asyncio
 import json
 import socket
 import re
+import logging
+_logger = logging.getLogger("ping")
+import logging
 
 TRIGGHT_KEYWORD = "ping "
 HELP_MESSAGE = "ping <域名或IP> -> 对目标执行ping并返回IP信息"
@@ -30,7 +33,7 @@ def _extract_latencies_ms(ping_text: str):
     for m in re.finditer(r"time[=<]?\s*=?\s*([\d\.]+)\s*ms", ping_text):
         try:
             times.append(float(m.group(1)))
-        except:
+        except Exception:
             pass
     return times[:4]
 

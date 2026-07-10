@@ -1,4 +1,7 @@
 import aiohttp
+import logging
+_logger = logging.getLogger("qr_code")
+import logging
 
 TRIGGHT_KEYWORD = "转码 "
 HELP_MESSAGE = "转码 <url/文本> -> 生成二维码图片"
@@ -27,6 +30,7 @@ async def on_message(event, actions, **kwargs):
                 else:
                     await actions.send(content="二维码生成失败，请稍后再试~")
     except Exception as e:
-        await actions.send(content=f"请求出错：{e}")
+        _logger.error(f"二维码生成失败: {e}")
+        await actions.send(content="请求出错，请稍后再试")
 
     return True
