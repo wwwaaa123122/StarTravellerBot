@@ -408,25 +408,23 @@ class XCLRClient(botpy.Client):
 
             async def send_local_file(self, file_path: str, file_type: int = 1):
                 """发送本地文件（base64 编码直接上传）"""
+                import base64
                 try:
                     with open(file_path, "rb") as f:
-                        file_bytes = f.read()
+                        file_b64 = base64.b64encode(f.read()).decode("utf-8")
                     from botpy.http import Route
                     group_openid = getattr(self._message, 'group_openid', None)
+                    payload = {
+                        "file_type": file_type,
+                        "file_data": file_b64,
+                        "srv_send_msg": True,
+                    }
                     if group_openid:
                         route = Route("POST", "/v2/groups/{group_openid}/files", group_openid=group_openid)
-                        await self._client.api._http.request(route, json={
-                            "file_image": file_bytes,
-                            "file_type": file_type,
-                            "srv_send_msg": True,
-                        })
                     else:
                         route = Route("POST", "/v2/users/{openid}/files", openid=self._message.author.user_openid)
-                        await self._client.api._http.request(route, json={
-                            "file_image": file_bytes,
-                            "file_type": file_type,
-                            "srv_send_msg": True,
-                        })
+                    await self._client.api._http.request(route, json=payload)
+                    self._client.logger.info(f"本地文件发送成功: {os.path.basename(file_path)}")
                 except Exception as e:
                     self._client.logger.error(f"发送本地文件失败: {e}")
 
@@ -630,6 +628,12 @@ class XCLRClient(botpy.Client):
 
             if content in ("状态", f"{self.reminder}状态"):
                 await self._handle_status_command(message)
+                return
+
+            if content in ("注销", f"{self.reminder}注销"):
+                self.context.user_lists.pop(user_openid, None)
+                await self._send_message(message, "已清除你的对话上下文记忆")
+                self.logger.info(f"[单聊] 用户 {user_label} 已清除上下文")
                 return
 
             if not self.allow_ai:
