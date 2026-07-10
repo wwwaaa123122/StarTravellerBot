@@ -406,6 +406,37 @@ class XCLRClient(botpy.Client):
                     self._client.logger.error(f"发送文件失败: {e}")
                     await self.send(content=f"发送文件失败: {e}")
 
+            async def send_local_file(self, file_path: str, file_type: int = 1):
+                """发送本地文件（上传到临时存储后发送）"""
+                import httpx
+                upload_urls = [
+                    "https://envs.sh",
+                    "https://0x0.st",
+                ]
+                try:
+                    mime_map = {1: "image/png", 2: "video/mp4", 3: "audio/wav"}
+                    mime = mime_map.get(file_type, "application/octet-stream")
+                    file_name = os.path.basename(file_path)
+                    with open(file_path, "rb") as f:
+                        data = f.read()
+                    for upload_url in upload_urls:
+                        try:
+                            async with httpx.AsyncClient(timeout=30) as client:
+                                resp = await client.post(
+                                    upload_url,
+                                    files={"file": (file_name, data, mime)},
+                                )
+                                if resp.status_code == 200:
+                                    url = resp.text.strip()
+                                    await self.send_file(url, file_type=file_type)
+                                    return
+                        except Exception:
+                            continue
+                    self._client.logger.warning(f"本地文件上传失败: {file_path}")
+                except Exception as e:
+                    self._client.logger.error(f"发送本地文件失败: {e}")
+                    await self.send(content=f"发送本地文件失败: {e}")
+
             async def send_help_image(self, help_text: str):
                 sent = await client._send_help_image(self._message, help_text)
                 if not sent:
@@ -542,11 +573,40 @@ class XCLRClient(botpy.Client):
 
     async def _handle_ai_chat(self, message, order, user_id, user_name, use_markdown=False):
         """统一的 AI 对话处理"""
-        send_func = lambda text: (
-            message.reply(markdown={"content": text}) if use_markdown
-            else self._send_message(message, text)
-        )
-        await self.ai_chat.handle_message(order, user_id, user_name, send_func)
+        if use_markdown:
+            send_func = lambda text: message.reply(markdown={"content": text})
+            await self.ai_chat.handle_message(order, user_id, user_name, send_func)
+        else:
+            result = await self.ai_chat.run(user_id, user_name, order)
+            if result:
+                await self._send_message(message, result)
+                asyncio.create_task(self._try_send_tts(message, result))
+            else:
+                await self._send_message(message, "AI 服务暂时不可用")
+
+    async def _try_send_tts(self, message, text: str):
+        """尝试为 AI 回复生成并发送语音"""
+        try:
+            from plugins.tts import sanitize_for_tts, _generate_tts
+            import gc
+
+            clean = sanitize_for_tts(text)
+            if not clean or len(clean) > 200:
+                return
+
+            audio_path = await _generate_tts(clean, self.config)
+            if audio_path:
+                actions = self._create_plugin_actions(message)
+                await actions.send_local_file(audio_path, file_type=3)
+                await asyncio.sleep(1)
+                if os.path.exists(audio_path):
+                    os.unlink(audio_path)
+                del actions
+                gc.collect()
+        except ImportError:
+            pass
+        except Exception as e:
+            self.logger.error(f"AI 语音生成失败: {e}")
 
     # ==================== 单聊消息处理 ====================
 
