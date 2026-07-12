@@ -336,7 +336,7 @@ class XCLRClient(botpy.Client):
 
         sig = inspect.signature(plugin['on_message'])
         kwargs = {name: available[name] for name in sig.parameters if name in available}
-        has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KWARGS for p in sig.parameters.values())
+        has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
         if has_var_kwargs:
             kwargs.update({key: value for key, value in available.items() if key not in kwargs})
         return kwargs
