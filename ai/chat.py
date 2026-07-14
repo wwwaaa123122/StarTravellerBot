@@ -5,6 +5,8 @@ from Tools.core import BotContext
 from Tools.rag_memory import RAGMemory
 from ai.role_manager import RoleManager
 
+CONTACT_URL = "https://xc-lr.cn/about"
+
 
 class AIChat:
     """AI 对话管理器：整合角色系统、RAG 记忆、多模型 API 调用"""
@@ -23,7 +25,6 @@ class AIChat:
         self.role_manager = role_manager or RoleManager()
 
     def build_system_prompt(self, user_id: str, user_name: str, query: str) -> str:
-        """构建系统提示词（角色 + RAG 记忆）"""
         sys_prompt = self.role_manager.get_system_prompt(
             user_id, self.bot_name, user_name, self.bot_username
         )
@@ -33,7 +34,6 @@ class AIChat:
         return sys_prompt
 
     async def run(self, user_id: str, user_name: str, query: str) -> str:
-        """执行 AI 对话，返回回复文本"""
         sys_prompt = self.build_system_prompt(user_id, user_name, query)
         result = await self._api_call(query, sys_prompt, user_id)
         if result:
@@ -42,18 +42,6 @@ class AIChat:
 
     async def handle_message(self, order: str, user_id: str, user_name: str,
                              send_func) -> bool:
-        """
-        处理 AI 对话消息，自动发送回复
-
-        Args:
-            order: 用户输入
-            user_id: 用户 ID
-            user_name: 用户昵称
-            send_func: 异步回调，接受文本参数用于发送回复
-
-        Returns:
-            bool: 是否成功
-        """
         try:
             result = await self.run(user_id, user_name, order)
             if result:
@@ -63,13 +51,12 @@ class AIChat:
         except TimeoutError:
             await send_func(f"😅 哎呀，你问的问题太复杂了，**{self.bot_name}** 想不出来了 ┭┮﹏┭┮")
             return False
-        except Exception:
+        except Exception as e:
             self.logger.error(f"AI 对话错误: {traceback.format_exc()}")
-            await send_func(f"😵 **{self.bot_name}** 发生错误了，请稍后再试 ε(┬┬﹏┬┬)3")
+            await send_func(f"😵 **{self.bot_name}** 发生错误了，请稍后再试 ε(┬┬﹏┬┬)3\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
             return False
 
     async def _api_call(self, question: str, sys_prompt: str, user_id: str) -> str:
-        """调用 AI API（DeepSeek / Gemini）"""
         mode = self.context.EnableNetwork
         others = self.config.get("Others", {})
 

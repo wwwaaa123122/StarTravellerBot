@@ -27,9 +27,7 @@ import botpy
 from botpy import logging
 from botpy.message import Message, DirectMessage
 
-# ==================== botpy 补丁 ====================
-# QQ 开放平台会发送 GROUP_MESSAGE_CREATE 事件，但当前 botpy 版本缺少对应的解析器。
-# 这里通过 monkey-patch 添加缺失的处理方法。
+CONTACT_URL = "https://xc-lr.cn/about"
 
 from botpy.connection import ConnectionState
 from botpy.message import GroupMessage as _GroupMessage
@@ -48,15 +46,10 @@ def _parse_group_message_create(self, payload):
 if not hasattr(ConnectionState, "parse_group_message_create"):
     ConnectionState.parse_group_message_create = _parse_group_message_create
 
-# ==================== aiohttp 兼容补丁 ====================
-# aiohttp 3.14+ 的 FormData 移除了 _is_processed 属性，
-# botpy._FormData._gen_form_data 覆写与之不兼容。
-# 父类的 _gen_form_data 已足够，直接替换掉 botpy 的覆写。
 from botpy.http import _FormData as _BotpyFormData
 _BotpyFormData._gen_form_data = _BotpyFormData.__bases__[0]._gen_form_data
-# ==================== 补丁结束 ====================
 
-# 添加项目根目录到路径
+
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
@@ -84,7 +77,6 @@ class XCLRClient(botpy.Client):
         Args:
             config: 配置字典
         """
-        # 订阅事件
         intents = botpy.Intents(
             public_guild_messages=True,  # 频道公域消息 (AT_MESSAGE_CREATE)
             public_messages=True,        # 群/C2C公域消息 (GROUP_AT_MESSAGE_CREATE, C2C_MESSAGE_CREATE)
@@ -102,28 +94,21 @@ class XCLRClient(botpy.Client):
         self.root_users = others.get("ROOT_User", [])
         self.version_name = VERSION_NAME
 
-        # 初始化运行上下文
         self.context = BotContext()
         self.context.EnableNetwork = others.get("default_mode", "Ds")
 
-        # AI 开关 (通过 config.json 中 Others.allow_ai 控制)
         self.allow_ai = others.get("allow_ai", True)
 
-        # 插件系统
         self._plugins = []
         self._plugins_help = {}
         self._plugins_bg_tasks = []
 
-        # RAG 记忆
         self.rag = RAGMemory(os.path.join(PROJECT_ROOT, "data"))
 
-        # 日志
         self.logger = logging.get_logger()
 
-        # 角色管理器
         self.role_manager = RoleManager()
 
-        # AI 对话
         self.ai_chat = AIChat(
             config=config,
             context=self.context,
@@ -147,7 +132,6 @@ class XCLRClient(botpy.Client):
         await super().close()
 
     async def on_ready(self):
-        """机器人就绪事件"""
         self.logger.info(f"{'='*50}")
         self.logger.info(f"{self.bot_name} 已上线!")
         self.logger.info(f"Version: {self.version_name}")
@@ -155,10 +139,7 @@ class XCLRClient(botpy.Client):
         self.logger.info(f"AI 对话: {'开启' if self.allow_ai else '关闭'}")
         self.logger.info(f"{'='*50}")
 
-        # 加载插件
         self._load_plugins()
-
-        # 启动插件后台任务
         await self._start_plugin_background_tasks()
 
     @staticmethod
@@ -208,7 +189,6 @@ class XCLRClient(botpy.Client):
             self.logger.info(f"插件 {plugin_name} 注册后台任务")
 
     def _load_plugins(self):
-        """加载插件"""
         plugin_dir = os.path.join(PROJECT_ROOT, "plugins")
         self._plugins.clear()
         self._plugins_help.clear()
@@ -236,7 +216,6 @@ class XCLRClient(botpy.Client):
         self.logger.info(f"插件加载完成: {len(self._plugins)} 个命令插件, {len(self._plugins_bg_tasks)} 个后台任务")
 
     async def _start_plugin_background_tasks(self):
-        """启动所有插件的后台任务"""
         for bg in self._plugins_bg_tasks:
             self.logger.info(f"启动插件后台任务: {bg['name']}")
             asyncio.create_task(bg['task'](self))
@@ -342,7 +321,6 @@ class XCLRClient(botpy.Client):
         return kwargs
 
     async def _execute_plugin(self, plugin: dict, message: Any, order: str) -> bool:
-        """执行单个插件"""
         try:
             result = await plugin['on_message'](**self._build_plugin_kwargs(plugin, message, order))
             if result:
@@ -355,7 +333,6 @@ class XCLRClient(botpy.Client):
             return False
 
     def _adapt_message_for_plugin(self, message: Any, content: str):
-        """为插件创建适配的事件对象"""
         class AdaptedEvent:
             def __init__(self, msg, text):
                 self.message = text
@@ -366,7 +343,6 @@ class XCLRClient(botpy.Client):
         return AdaptedEvent(message, content)
 
     def _create_plugin_actions(self, message: Any):
-        """为插件创建 actions 对象"""
         client = self
 
         class PluginActions:
@@ -478,8 +454,6 @@ class XCLRClient(botpy.Client):
 
         return PluginActions()
 
-    # ==================== 统一消息发送 ====================
-
     async def _send_message(self, message, content=None, msg_type=0, markdown=None):
         """
         发送消息，自动识别消息类型（单聊/群聊）
@@ -526,18 +500,13 @@ class XCLRClient(botpy.Client):
         except Exception as e:
             self.logger.error(f"发送消息失败: {e}")
 
-    # ==================== 帮助消息发送 ====================
-
     async def _send_help_image(self, message, help_text: str) -> bool:
-        """发送格式化的 Markdown 帮助文本到当前会话。"""
         try:
             await self._send_message(message, help_text)
             return True
         except Exception as e:
             self.logger.error(f"发送帮助消息失败: {e}")
             return False
-
-    # ==================== 统一命令处理 ====================
 
     async def _reply(self, message, content=None, markdown=None):
         """统一的回复接口，自动适配消息类型"""
@@ -599,8 +568,6 @@ class XCLRClient(botpy.Client):
         except Exception as e:
             self.logger.error(f"AI 语音生成失败: {e}")
 
-    # ==================== 单聊消息处理 ====================
-
     async def on_c2c_message_create(self, message: Any):
         """
         处理 QQ 单聊消息 (C2C_MESSAGE_CREATE)
@@ -649,24 +616,22 @@ class XCLRClient(botpy.Client):
             if len(content) >= 1:
                 await self._handle_ai_chat(message, content, user_openid, "用户")
 
-        except Exception:
+        except Exception as e:
             self.logger.error(f"处理单聊消息错误: {traceback.format_exc()}")
             try:
-                await self._send_message(message, f"{self.bot_name}发生错误了，请稍后再试")
+                await self._send_message(message, f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
             except Exception:
                 pass
 
-    # ==================== 群聊消息处理（仅插件） ====================
+
 
     def _try_get_nickname(self, message) -> str:
-        """尝试获取用户昵称"""
         try:
             return message.author.username or ""
         except AttributeError:
             return ""
 
     def _strip_mention(self, content: str) -> str:
-        """移除消息中的 @机器人 前缀"""
         if content.startswith(f"<@!{self.robot.id}>"):
             return content[len(f"<@!{self.robot.id}>"):].strip()
         elif content.startswith(f"<@{self.robot.id}>"):
@@ -716,10 +681,10 @@ class XCLRClient(botpy.Client):
             if content and not content.startswith(self.reminder):
                 await self._send_message(message, f"未找到匹配的插件命令，发送 @机器人 /帮助 查看可用指令")
 
-        except Exception:
+        except Exception as e:
             self.logger.error(f"处理群聊消息错误: {traceback.format_exc()}")
             try:
-                await self._send_message(message, f"{self.bot_name}发生错误了，请稍后再试")
+                await self._send_message(message, f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
             except Exception:
                 pass
 
@@ -768,14 +733,12 @@ class XCLRClient(botpy.Client):
             if raw_content.startswith(self.reminder):
                 await self._send_message(message, f"未找到匹配的插件命令，发送 @机器人 /帮助 查看可用指令")
 
-        except Exception:
+        except Exception as e:
             self.logger.error(f"处理群聊全量消息错误: {traceback.format_exc()}")
             try:
-                await self._send_message(message, f"{self.bot_name}发生错误了，请稍后再试")
+                await self._send_message(message, f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
             except Exception:
                 pass
-
-    # ==================== 频道私信处理 ====================
 
     async def on_direct_message_create(self, message: DirectMessage):
         """
@@ -814,14 +777,12 @@ class XCLRClient(botpy.Client):
             if len(content) >= 2:
                 await self._handle_ai_chat(message, content, user_id, message.author.username, use_markdown=True)
 
-        except Exception:
+        except Exception as e:
             self.logger.error(f"处理频道私信错误: {traceback.format_exc()}")
             try:
-                await message.reply(content=f"{self.bot_name}发生错误了，请稍后再试")
+                await message.reply(content=f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
             except Exception:
                 pass
-
-    # ==================== 频道消息处理 ====================
 
     async def on_at_message_create(self, message: Message):
         """
@@ -866,14 +827,14 @@ class XCLRClient(botpy.Client):
                     await self._handle_ai_chat(message, order, user_id, message.author.username, use_markdown=True)
                     return
 
-        except Exception:
+        except Exception as e:
             self.logger.error(f"处理频道消息错误: {traceback.format_exc()}")
             try:
-                await message.reply(content=f"{self.bot_name}发生错误了，请稍后再试")
+                await message.reply(content=f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
             except Exception:
                 pass
 
-    # ==================== 事件监听 ====================
+
 
     async def on_group_add_robot(self, group: Any):
         self.logger.info(f"机器人被添加到群: {group.group_openid if hasattr(group, 'group_openid') else 'unknown'}")
@@ -893,13 +854,8 @@ class XCLRClient(botpy.Client):
     async def on_friend_del(self, user: Any):
         self.logger.info(f"好友删除: {user.user_openid if hasattr(user, 'user_openid') else 'unknown'}")
 
-    # ==================== AI 对话处理 ====================
-    # 委托给 self.ai_chat (ai/chat.py)
-    # 角色系统委托给 self.role_manager (ai/role_manager.py)
-
     @staticmethod
     def _has_markdown_syntax(text: str) -> bool:
-        """检测文本是否包含 Markdown 语法"""
         if not text:
             return False
         lines = text.split('\n')
@@ -927,7 +883,6 @@ class XCLRClient(botpy.Client):
             return True
         return False
 
-    # 插件分类映射：分类名 -> 该分类下插件名列表
     PLUGIN_CATEGORIES = [
         ("🎯 签到系统", ["checkin", "affection"]),
         ("🌤️ 生活工具", ["weather", "ping", "hitokoto", "domain_whois", "httptest"]),
@@ -937,7 +892,6 @@ class XCLRClient(botpy.Client):
     ]
 
     def _get_help_text(self) -> str:
-        """动态生成帮助文本"""
         lines = [f"## 📖 {self.bot_name} 帮助", ""]
         lines.append("### 💡 群聊指令格式")
         lines.append("- **@机器人 /指令** - 执行指令")
@@ -964,7 +918,6 @@ class XCLRClient(botpy.Client):
         return "\n".join(lines)
 
     def _get_status_text(self) -> str:
-        """获取状态文本"""
         try:
             import psutil
             cpu = psutil.cpu_percent(interval=0.1)
