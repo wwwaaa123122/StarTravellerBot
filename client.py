@@ -524,6 +524,38 @@ class XCLRClient(botpy.Client):
         if not sent:
             await self._reply(message, content=help_text)
 
+    async def _handle_roleplay_command(self, message, content) -> bool:
+        """处理角色扮演命令（集成到主程序而非插件系统）"""
+        if not content.startswith("角色"):
+            return False
+
+        adapted_event = self._adapt_message_for_plugin(message, content)
+        actions = self._create_plugin_actions(message)
+        manager, segments, events = self._create_plugin_compat_objects()
+
+        kwargs = {
+            'event': adapted_event,
+            'actions': actions,
+            'Manager': manager,
+            'Segments': segments,
+            'Events': events,
+            'reminder': self.reminder,
+            'bot_name': self.bot_name,
+            'order': content,
+            'ROOT_User': self.root_users,
+            'Super_User': [],
+            'Manage_User': [],
+            'config': self.config,
+            'time': time,
+            'cooldowns': {},
+            'plugins': self._plugins,
+            'plugin_categories': self.PLUGIN_CATEGORIES,
+            'client': self,
+        }
+
+        from ai.roleplay import on_message as roleplay_on_message
+        return await roleplay_on_message(adapted_event, actions, **kwargs)
+
     async def _handle_status_command(self, message):
         status = self._get_status_text()
         if hasattr(message, 'reply'):
@@ -603,6 +635,9 @@ class XCLRClient(botpy.Client):
                 self.logger.info(f"[单聊] 用户 {user_label} 已清除上下文")
                 return
 
+            if await self._handle_roleplay_command(message, content):
+                return
+
             if not self.allow_ai:
                 await self._send_message(message, f"未找到相关指令")
                 return
@@ -674,6 +709,9 @@ class XCLRClient(botpy.Client):
                 await self._handle_status_command(message)
                 return
 
+            if await self._handle_roleplay_command(message, order):
+                return
+
             plugin_result = await self._try_plugins(message, order)
             if plugin_result:
                 return
@@ -726,6 +764,9 @@ class XCLRClient(botpy.Client):
                 await self._handle_status_command(message)
                 return
 
+            if await self._handle_roleplay_command(message, order):
+                return
+
             plugin_result = await self._try_plugins(message, order, skip_plugins={"affection"})
             if plugin_result:
                 return
@@ -762,6 +803,9 @@ class XCLRClient(botpy.Client):
 
             if content in ("帮助", f"{self.reminder}帮助"):
                 await self._handle_help_command(message)
+                return
+
+            if await self._handle_roleplay_command(message, content):
                 return
 
             if not self.allow_ai:
@@ -815,6 +859,9 @@ class XCLRClient(botpy.Client):
 
             if content in ("状态", f"{self.reminder}状态"):
                 await self._handle_status_command(message)
+                return
+
+            if await self._handle_roleplay_command(message, content):
                 return
 
             if not self.allow_ai:
@@ -887,7 +934,6 @@ class XCLRClient(botpy.Client):
         ("🎯 签到系统", ["checkin", "affection"]),
         ("🌤️ 生活工具", ["weather", "ping", "hitokoto", "domain_whois", "httptest"]),
         ("🎨 娱乐工具", ["acg_picture", "qr_code", "mc_status"]),
-        ("🎭 角色扮演", ["roleplay"]),
         ("📺 直播监控", ["kick"]),
     ]
 
@@ -901,6 +947,11 @@ class XCLRClient(botpy.Client):
         lines.append("**📋 帮助**")
         lines.append("- **@机器人 /帮助** - 显示此帮助")
         lines.append("- **@机器人 /状态** - 查看状态")
+        lines.append("")
+        lines.append("**🎭 角色扮演**")
+        lines.append("- **@机器人 /角色 列表** - 查看可用角色")
+        lines.append("- **@机器人 /角色 切换 <名称>** - 切换角色")
+        lines.append("- **@机器人 /角色 创建 <名称> [提示词]** - 创建自定义角色")
         lines.append("")
 
         plugin_help_map = {p['name']: p['help'] for p in self._plugins}
