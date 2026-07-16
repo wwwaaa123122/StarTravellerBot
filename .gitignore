@@ -6,3 +6,10 @@ botpy.log*
 *.db
 temp/
 config.json
+
+# VitePress
+node_modules/
+.vitepress/
+vitepress/dist/
+vitepress/cache/
+docs/.vitepress/
