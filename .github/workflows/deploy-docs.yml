@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'docs/**'
-      - 'vitepress/**'
+      - '.vitepress/config.mts'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 

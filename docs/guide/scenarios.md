@@ -1,3 +1,12 @@
+---
+prev:
+  text: '项目结构'
+  link: '/guide/structure'
+next:
+  text: '插件开发'
+  link: '/plugins/introduction'
+---
+
 # 消息场景
 
 机器人支持以下 4 种消息场景：

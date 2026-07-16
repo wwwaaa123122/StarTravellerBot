@@ -1,3 +1,9 @@
+---
+prev:
+  text: '工具模块'
+  link: '/tools/overview'
+---
+
 # API 参考
 
 ## XCLRClient

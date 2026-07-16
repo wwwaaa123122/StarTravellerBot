@@ -1,3 +1,12 @@
+---
+prev:
+  text: '消息场景'
+  link: '/guide/scenarios'
+next:
+  text: '内置插件'
+  link: '/plugins/builtin'
+---
+
 # 插件开发
 
 ## 插件架构

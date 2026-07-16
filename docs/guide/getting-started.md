@@ -1,3 +1,9 @@
+---
+next:
+  text: '项目结构'
+  link: '/guide/structure'
+---
+
 # 快速开始
 
 ## 环境要求

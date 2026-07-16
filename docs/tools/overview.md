@@ -1,3 +1,12 @@
+---
+prev:
+  text: '角色系统'
+  link: '/ai/roleplay'
+next:
+  text: 'API 参考'
+  link: '/api/reference'
+---
+
 # 工具模块
 
 ## Tools.core

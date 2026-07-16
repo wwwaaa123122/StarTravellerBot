@@ -1,3 +1,12 @@
+---
+prev:
+  text: '插件开发'
+  link: '/plugins/introduction'
+next:
+  text: 'AI 对话'
+  link: '/ai/chat'
+---
+
 # 内置插件
 
 ## 签到系统

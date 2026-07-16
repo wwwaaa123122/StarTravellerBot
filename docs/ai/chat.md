@@ -1,3 +1,12 @@
+---
+prev:
+  text: '内置插件'
+  link: '/plugins/builtin'
+next:
+  text: '角色系统'
+  link: '/ai/roleplay'
+---
+
 # AI 对话
 
 ## 概述

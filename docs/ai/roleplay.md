@@ -1,3 +1,12 @@
+---
+prev:
+  text: 'AI 对话'
+  link: '/ai/chat'
+next:
+  text: '工具模块'
+  link: '/tools/overview'
+---
+
 # 角色系统
 
 ## 概述
