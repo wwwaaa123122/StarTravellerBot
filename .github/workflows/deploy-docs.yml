@@ -40,6 +40,9 @@ jobs:
       - name: Build VitePress
         run: pnpm run docs:build
 
+      - name: Create CNAME for custom domain
+        run: echo 'xc.bot.cd' > .vitepress/dist/CNAME
+
       - name: Deploy to docs branch
         run: |
           cd .vitepress/dist

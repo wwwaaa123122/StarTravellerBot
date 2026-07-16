@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  base: '/StarTravellerBot/',
+  base: '/',
   srcDir: "docs",
 
   title: "星辰旅人BOT文档",
