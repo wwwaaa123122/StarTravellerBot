@@ -511,7 +511,10 @@ class XCLRClient(botpy.Client):
     async def _reply(self, message, content=None, markdown=None):
         """统一的回复接口，自动适配消息类型"""
         if hasattr(message, 'reply'):
-            await message.reply(content=content, markdown=markdown or {})
+            kwargs = {"content": content}
+            if markdown:
+                kwargs["markdown"] = markdown
+            await message.reply(**kwargs)
         else:
             await self._send_message(message, content, markdown=markdown)
 
