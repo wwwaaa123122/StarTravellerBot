@@ -7,7 +7,7 @@
 - WebSocket 网关（心跳、Resume 重连、事件分发）
 """
 
-__version__ = "0.1.0.dev2"
+__version__ = "0.1.0.dev3"
 
 from . import logging  # noqa: F401
 from .api import API  # noqa: F401

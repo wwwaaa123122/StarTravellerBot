@@ -1,6 +1,5 @@
-# 本仓库源码即 qqbot-openapi 包（模块 qqbot_openapi）：
-#   开发/部署环境请用 `pip install -e .` 安装本地包及其依赖（见 pyproject.toml）
-# 若 qqbot-openapi 发布到 PyPI，可在此追加 `qqbot-openapi>=0.1.0`
+# qqbot-openapi 已发布到 PyPI，本仓库源码即该包的开发源（模块 qqbot_openapi）
+qqbot-openapi>=0.1.0.dev3
 httpx>=0.27.0,<1.0
 aiohttp>=3.9.0
 psutil>=5.9.0
