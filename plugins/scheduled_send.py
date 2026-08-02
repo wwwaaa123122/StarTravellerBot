@@ -32,7 +32,7 @@ def _save_sent(date: str):
 
 
 async def _send_to_groups(client, content: str, notify_groups: list):
-    """通过 botpy API 向所有通知群发送消息"""
+    """通过 qqbot_openapi API 向所有通知群发送消息"""
     for group_openid in notify_groups:
         try:
             await client.api.post_group_message(

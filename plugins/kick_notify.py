@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Kick 开播提醒 - QQ 开放平台插件
-监控 Kick 主播开播状态，通过 botpy API 发送通知
+监控 Kick 主播开播状态，通过 qqbot_openapi API 发送通知
 """
 
 import json
@@ -60,7 +60,7 @@ def _format_offline_msg(channel: str) -> str:
 
 
 async def _send_notification(client, message: str, notify_groups: list, notify_users: list):
-    """通过 botpy API 发送通知到指定群和用户"""
+    """通过 qqbot_openapi API 发送通知到指定群和用户"""
     for group_openid in notify_groups:
         try:
             await client.api.post_group_message(
