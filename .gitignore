@@ -13,3 +13,8 @@ node_modules/
 .vitepress/cache/
 .venv/
 botpy*
+
+# Python 构建产物
+*.egg-info/
+build/
+dist/
