@@ -11,3 +11,5 @@ config.json
 node_modules/
 .vitepress/dist/
 .vitepress/cache/
+.venv/
+botpy*
