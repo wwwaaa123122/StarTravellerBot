@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qqbot-openapi"
+version = "0.1.0.dev1"
+description = "QQ 开放平台机器人 SDK 轻量封装（鉴权/API/网关）"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "StarTravellerBot" }]
+dependencies = [
+    "httpx>=0.27.0",
+    "aiohttp>=3.9.0",
+    "psutil>=5.9.0",
+]
+
+[tool.setuptools]
+packages = ["qqbot_openapi"]
