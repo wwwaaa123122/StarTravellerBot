@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 星辰旅人 QQ 开放平台机器人
-基于 botpy (QQ Official Bot Python SDK)
+基于 qqbot_openapi（QQ 开放平台轻量 SDK，本项目内 pip 包）
 
 文档: https://bot.q.qq.com/wiki/develop/pythonsdk/
 """

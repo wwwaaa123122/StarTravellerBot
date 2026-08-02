@@ -23,31 +23,11 @@ import inspect
 from typing import Dict, Any, Optional
 
 import httpx
-import botpy
-from botpy import logging
-from botpy.message import Message, DirectMessage
+from qqbot_openapi import logging
+from qqbot_openapi import Message, DirectMessage
+from qqbot_openapi import Client as QQClient, Intents
 
 CONTACT_URL = "https://xc-lr.cn/about"
-
-from botpy.connection import ConnectionState
-from botpy.message import GroupMessage as _GroupMessage
-
-
-def _parse_group_message_create(self, payload):
-    """解析 GROUP_MESSAGE_CREATE 事件"""
-    _message = _GroupMessage(
-        self.api,
-        payload.get("id", None),
-        payload.get("d", {}),
-    )
-    self._dispatch("group_message_create", _message)
-
-
-if not hasattr(ConnectionState, "parse_group_message_create"):
-    ConnectionState.parse_group_message_create = _parse_group_message_create
-
-from botpy.http import _FormData as _BotpyFormData
-_BotpyFormData._gen_form_data = _BotpyFormData.__bases__[0]._gen_form_data
 
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -59,7 +39,7 @@ from ai.role_manager import RoleManager
 from ai.chat import AIChat
 
 
-class XCLRClient(botpy.Client):
+class XCLRClient(QQClient):
     """
     星辰旅人 QQ 开放平台机器人客户端
 
@@ -77,7 +57,7 @@ class XCLRClient(botpy.Client):
         Args:
             config: 配置字典
         """
-        intents = botpy.Intents(
+        intents = Intents(
             public_guild_messages=True,  # 频道公域消息 (AT_MESSAGE_CREATE)
             public_messages=True,        # 群/C2C公域消息 (GROUP_AT_MESSAGE_CREATE, C2C_MESSAGE_CREATE)
             direct_message=True,         # 频道私信
@@ -388,7 +368,7 @@ class XCLRClient(botpy.Client):
                 try:
                     with open(file_path, "rb") as f:
                         file_b64 = base64.b64encode(f.read()).decode("utf-8")
-                    from botpy.http import Route
+                    from qqbot_openapi import Route
                     group_openid = getattr(self._message, 'group_openid', None)
                     payload = {
                         "file_type": file_type,
@@ -887,22 +867,22 @@ class XCLRClient(botpy.Client):
 
 
     async def on_group_add_robot(self, group: Any):
-        self.logger.info(f"机器人被添加到群: {group.group_openid if hasattr(group, 'group_openid') else 'unknown'}")
+        self.logger.info(f"机器人被添加到群: {getattr(group, 'group_openid', None) or 'unknown'}")
 
     async def on_group_del_robot(self, group: Any):
-        self.logger.info(f"机器人被移出群: {group.group_openid if hasattr(group, 'group_openid') else 'unknown'}")
+        self.logger.info(f"机器人被移出群: {getattr(group, 'group_openid', None) or 'unknown'}")
 
     async def on_group_msg_reject(self, group: Any):
-        self.logger.info(f"群消息被拒绝: {group.group_openid if hasattr(group, 'group_openid') else 'unknown'}")
+        self.logger.info(f"群消息被拒绝: {getattr(group, 'group_openid', None) or 'unknown'}")
 
     async def on_group_msg_receive(self, group: Any):
-        self.logger.info(f"群消息接收恢复: {group.group_openid if hasattr(group, 'group_openid') else 'unknown'}")
+        self.logger.info(f"群消息接收恢复: {getattr(group, 'group_openid', None) or 'unknown'}")
 
     async def on_friend_add(self, user: Any):
-        self.logger.info(f"好友添加: {user.user_openid if hasattr(user, 'user_openid') else 'unknown'}")
+        self.logger.info(f"好友添加: {getattr(user, 'user_openid', None) or 'unknown'}")
 
     async def on_friend_del(self, user: Any):
-        self.logger.info(f"好友删除: {user.user_openid if hasattr(user, 'user_openid') else 'unknown'}")
+        self.logger.info(f"好友删除: {getattr(user, 'user_openid', None) or 'unknown'}")
 
     @staticmethod
     def _has_markdown_syntax(text: str) -> bool:
