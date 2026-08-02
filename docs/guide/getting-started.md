@@ -24,13 +24,15 @@ cd StarTravellerBot
 ### 2. 安装依赖
 
 ```bash
+# 安装本地包 qqbot-openapi 及其核心依赖（httpx/aiohttp/psutil）
+pip install -e .
+# 安装插件额外依赖（如 python-whois）
 pip install -r requirements.txt
 ```
 
 核心依赖：
-- `qq-botpy` — QQ 开放平台 Python SDK
+- `qqbot-openapi` — QQ 开放平台 SDK（本仓库源码，`pip install -e .` 安装）
 - `httpx` — HTTP 客户端
-- `python-dotenv` — 环境变量管理
 - `psutil` — 系统状态监控
 
 ### 3. 配置

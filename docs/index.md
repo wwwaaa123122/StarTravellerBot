@@ -5,7 +5,7 @@ layout: home
 hero:
   name: "星辰旅人 BOT"
   text: "QQ 开放平台机器人"
-  tagline: 基于 botpy SDK，支持 AI 对话、角色扮演、丰富插件系统
+  tagline: 基于 qqbot-openapi SDK，支持 AI 对话、角色扮演、丰富插件系统
   image:
     src: /logo.png
     alt: 星辰旅人

@@ -129,7 +129,7 @@ async def background_tasks(client):
         await asyncio.sleep(60)
 ```
 
-`client` 参数是 `XCLRClient` 实例，可通过 `client.api` 调用 botpy API。
+`client` 参数是 `XCLRClient` 实例，可通过 `client.api` 调用 qqbot_openapi API。
 
 ## 调试建议
 

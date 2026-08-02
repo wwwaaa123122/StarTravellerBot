@@ -1,6 +1,6 @@
 # 星辰旅人 - QQ 开放平台机器人
 
-基于 [qq-botpy](https://github.com/tencent-connect/botpy) SDK 的 QQ 开放平台机器人，支持多场景消息分发、插件系统、AI 对话和角色扮演。
+基于 [qqbot-openapi](https://github.com/wwwaaa123122/StarTravellerBot)（本项目内 pip 包，QQ 开放平台轻量 SDK）的 QQ 开放平台机器人，支持多场景消息分发、插件系统、AI 对话和角色扮演。
 
 ## 功能特性
 
@@ -14,6 +14,9 @@
 ### 1. 安装依赖
 
 ```bash
+# 安装本地包 qqbot-openapi 及其核心依赖（httpx/aiohttp/psutil）
+pip install -e .
+# 安装插件额外依赖（如 python-whois）
 pip install -r requirements.txt
 ```
 
@@ -39,8 +42,9 @@ python open-qq/main.py
 ```
 open-qq/
 ├── main.py          # 入口，加载配置并创建客户端
+├── qqbot_openapi/   # 轻量 SDK：鉴权/API/网关
 ├── client.py        # 核心客户端，消息分发 + AI 调用
-├── adapters.py      # botpy API 适配器
+├── adapters.py      # qqbot_openapi API 适配器
 ├── ai/              # AI 模块
 │   ├── chat.py         # 对话处理
 │   ├── role_manager.py # 角色管理
@@ -117,12 +121,12 @@ open-qq/
 
 ## 依赖
 
-- `qq-botpy` >= 1.2.0
+- `qqbot-openapi`（本仓库源码，`pip install -e .` 安装）
 - `httpx` >= 0.27.0
 - `aiohttp` >= 3.9.0
+- `psutil` >= 5.9.0
 - `psutil` >= 5.9.0
 
 ## 文档
 
 - [QQ 开放平台文档](https://bot.q.qq.com/wiki/)
-- [botpy SDK 文档](https://bot.q.qq.com/wiki/develop/pythonsdk/)

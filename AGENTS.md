@@ -2,7 +2,7 @@
 
 ## 概述
 
-QQ 开放平台机器人（星辰旅人），基于 `qq-botpy` SDK。这是 `XCLR_QQ_bot` 的独立子模块，处理 QQ 频道/群聊/单聊消息，支持插件系统和多模型 AI 对话。
+QQ 开放平台机器人（星辰旅人），基于本项目内 pip 包 `qqbot-openapi`（轻量 SDK，替代旧版 `qq-botpy`）。这是 `XCLR_QQ_bot` 的独立子模块，处理 QQ 频道/群聊/单聊消息，支持插件系统和多模型 AI 对话。
 
 ## 运行
 
@@ -14,15 +14,16 @@ python open-qq/main.py
 cd open-qq && python main.py
 ```
 
-依赖用父项目的 `requirements.txt`，核心依赖：`qq-botpy`, `python-dotenv`, `httpx`, `psutil`
+依赖：本地包 `qqbot-openapi` 及其核心依赖（`httpx`/`aiohttp`/`psutil`）由 `pyproject.toml` 声明，`pip install -e .` 安装；`requirements.txt` 仅含插件额外依赖（如 `python-whois`）。
 
 ## 项目结构
 
 ```
 open-qq/
 ├── main.py          # 入口，加载 .env + config.json，创建 XCLRClient
-├── client.py        # 核心：XCLRClient(botpy.Client)，消息分发 + AI 调用
-├── adapters.py      # botpy API 适配器（频道消息/权限/频道管理）
+├── client.py        # 核心：XCLRClient(qqbot_openapi.Client)，消息分发 + AI 调用
+├── adapters.py      # qqbot_openapi API 适配器（频道消息/权限/频道管理）
+├── qqbot_openapi/   # 轻量 SDK：鉴权管理/HTTP API/网关连接
 ├── plugins/         # 插件目录，动态加载
 ├── data/            # 持久化数据（签到、角色）
 └── .env             # AppID + AppSecret（必须配置）

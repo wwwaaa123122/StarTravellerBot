@@ -12,9 +12,10 @@ next:
 ```
 StarTravellerBot/
 ├── main.py                  # 入口：加载配置，创建 XCLRClient
-├── client.py                # 核心：XCLRClient(botpy.Client)，消息分发 + AI 调用
+├── client.py                # 核心：XCLRClient(qqbot_openapi.Client)，消息分发 + AI 调用
 ├── config.json              # 配置文件（需自行创建）
-├── requirements.txt         # Python 依赖
+├── pyproject.toml          # 本地包 qqbot-openapi 元数据 + 核心依赖
+├── requirements.txt        # 插件额外依赖（python-whois 等）
 │
 ├── ai/                      # AI 模块
 │   ├── chat.py              # AIChat - 对话管理器（模型调用、上下文管理）
@@ -58,7 +59,7 @@ StarTravellerBot/
 | 文件 | 职责 |
 | :--- | :--- |
 | `main.py` | 入口点，加载 `config.json`，初始化 `XCLRClient`，调用 `client.run()` |
-| `client.py` | 继承 `botpy.Client`，处理 6 种消息事件，分发到插件/AI |
+| `client.py` | 继承 `qqbot_openapi.Client`，处理 6 种消息事件，分发到插件/AI |
 | `ai/chat.py` | AI 对话核心，支持 DeepSeek 和 Gemini 双模型 |
 | `ai/role_manager.py` | 角色数据的 CRUD，持久化到 JSON |
 | `Tools/core.py` | 运行上下文（版本号、AI 模式、对话历史） |
@@ -66,7 +67,7 @@ StarTravellerBot/
 ## 数据流程
 
 ```
-QQ消息 → botpy SDK → XCLRClient.on_*_message_create()
+QQ消息 → qqbot_openapi SDK → XCLRClient.on_*_message_create()
   ├── 内置命令 (ping/帮助/状态/注销)
   ├── 角色命令 (角色 切换/创建/列表...)
   ├── 插件匹配 (按 TRIGGHT_KEYWORD)
