@@ -15,6 +15,9 @@ _log = logging.get_logger(__name__)
 API_BASE_PROD = "https://api.sgroup.qq.com"
 API_BASE_SANDBOX = "https://sandbox.api.sgroup.qq.com"
 
+# 获取 AppAccessToken 的固定域名（与业务 API 域名不同，不区分沙箱/正式）
+TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken"
+
 # WebSocket 网关地址
 WSS_BASE_PROD = "wss://api.sgroup.qq.com/websocket"
 WSS_BASE_SANDBOX = "wss://sandbox.api.sgroup.qq.com/websocket"
@@ -58,7 +61,7 @@ class AccessTokenManager:
 
     async def refresh(self) -> str:
         """强制向开放平台申请新的 access_token"""
-        url = f"{self._base_url}/app/getAppAccessToken"
+        url = TOKEN_URL
         payload = {"appId": self._app_id, "clientSecret": self._secret}
         try:
             resp = await self._session.post(url, json=payload)
