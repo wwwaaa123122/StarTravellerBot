@@ -157,10 +157,87 @@ class Ready(Model):
     """READY 事件：version、session_id、user、shard"""
 
 
+class Guild(Model):
+    """频道对象（GUILD_CREATE / GUILD_UPDATE / GUILD_DELETE）
+
+    字段：id、name、icon、owner_id、member_count、max_members、description、
+    joined_at、channels 等。
+    """
+
+
+class Channel(Model):
+    """子频道对象（CHANNEL_CREATE / CHANNEL_UPDATE / CHANNEL_DELETE）
+
+    字段：id、guild_id、name、type、parent_id、position、sub_type、
+    permissions、owner_id、private_type 等。
+    """
+
+
+class GuildMember(Model):
+    """频道成员对象（GUILD_MEMBER_ADD / GUILD_MEMBER_UPDATE / GUILD_MEMBER_REMOVE）
+
+    字段：user、nick、roles、joined_at、deaf、mute、pending、guild_id、
+    op_user_id、group_openid 等。
+    """
+
+
+class Reaction(Model):
+    """表情表态对象（MESSAGE_REACTION_ADD / MESSAGE_REACTION_REMOVE）
+
+    字段：user_id、channel_id、guild_id、target、emoji、group_openid 等。
+    """
+
+
+class Interaction(Model):
+    """互动事件对象（INTERACTION_CREATE）
+
+    字段：id、type、application_id、channel_id、guild_id、data、version、
+    group_openid 等。
+    """
+
+
+class MessageAudit(Model):
+    """消息审核事件（MESSAGE_AUDIT_PASS / MESSAGE_AUDIT_REJECT）
+
+    字段：audit_id、message_id、guild_id、channel_id、audit_time、
+    create_time、seq_in_channel、group_openid 等。
+    """
+
+
+class Thread(Model):
+    """论坛主题对象（FORUM_THREAD_CREATE / FORUM_THREAD_UPDATE /
+    FORUM_THREAD_DELETE），字段：guild_id、channel_id、author_id、thread_info"""
+
+
+class Post(Model):
+    """论坛帖子对象（FORUM_POST_CREATE / FORUM_POST_DELETE）
+
+    字段：guild_id、channel_id、author_id、post_info"""
+
+
+class Reply(Model):
+    """论坛评论对象（FORUM_REPLY_CREATE / FORUM_REPLY_DELETE）
+
+    字段：guild_id、channel_id、author_id、reply_info"""
+
+
+class AuditResult(Model):
+    """论坛发表审核结果（FORUM_PUBLISH_AUDIT_RESULT）
+
+    字段：guild_id、channel_id、author_id、audit_result"""
+
+
+class Audio(Model):
+    """音频对象（AUDIO_START / AUDIO_FINISH / AUDIO_ON_MIC / AUDIO_OFF_MIC）
+
+    字段：channel_id、guild_id、audio_url、status、text、user_id、
+    sec_member、member"""
+
+
 # 类型别名，兼容 botpy 风格导入
 User = Model
 Author = Model
-Member = Model
+Member = GuildMember
 Embed = Model
 Attachment = Model
 MessageReference = Model

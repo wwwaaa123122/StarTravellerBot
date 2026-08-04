@@ -20,12 +20,23 @@ import aiohttp
 from . import logging as qq_logging
 from .errors import WebSocketClosedError
 from .message import (
+    AuditResult,
+    Audio,
+    Channel,
     DirectMessage,
     FriendUser,
     Group,
     GroupMessage,
+    Guild,
+    GuildMember,
+    Interaction,
     Message,
+    MessageAudit,
+    Post,
+    Reaction,
     Ready,
+    Reply,
+    Thread,
 )
 
 _log = qq_logging.get_logger(__name__)
@@ -71,8 +82,13 @@ _FATAL_CODES = frozenset(
 )
 
 # 事件名 → (Client 回调方法名, 模型类)
+#
+# 覆盖旧版 botpy 的事件回调（官方文档确认仍可使用），事件名与
+# 开放平台网关 Dispatch 的 ``t`` 字段一一对应。
 _EVENT_HANDLERS: Dict[str, tuple] = {
+    # 网关就绪
     "READY": ("on_ready", Ready),
+    # 群聊 / C2C 单聊 / 好友（1 << 25）
     "C2C_MESSAGE_CREATE": ("on_c2c_message_create", GroupMessage),
     "GROUP_AT_MESSAGE_CREATE": ("on_group_at_message_create", GroupMessage),
     "GROUP_MESSAGE_CREATE": ("on_group_message_create", GroupMessage),
@@ -82,8 +98,47 @@ _EVENT_HANDLERS: Dict[str, tuple] = {
     "GROUP_MSG_RECEIVE": ("on_group_msg_receive", Group),
     "FRIEND_ADD": ("on_friend_add", FriendUser),
     "FRIEND_DEL": ("on_friend_del", FriendUser),
-    "DIRECT_MESSAGE_CREATE": ("on_direct_message_create", DirectMessage),
+    # 频道消息（guild_messages / public_guild_messages）
     "AT_MESSAGE_CREATE": ("on_at_message_create", Message),
+    "PUBLIC_MESSAGE_DELETE": ("on_public_message_delete", Message),
+    "MESSAGE_CREATE": ("on_message_create", Message),
+    "MESSAGE_DELETE": ("on_message_delete", Message),
+    # 频道私信（direct_message）
+    "DIRECT_MESSAGE_CREATE": ("on_direct_message_create", DirectMessage),
+    "DIRECT_MESSAGE_DELETE": ("on_direct_message_delete", DirectMessage),
+    # 消息表态（guild_message_reactions）
+    "MESSAGE_REACTION_ADD": ("on_message_reaction_add", Reaction),
+    "MESSAGE_REACTION_REMOVE": ("on_message_reaction_remove", Reaction),
+    # 频道 / 子频道（guilds）
+    "GUILD_CREATE": ("on_guild_create", Guild),
+    "GUILD_UPDATE": ("on_guild_update", Guild),
+    "GUILD_DELETE": ("on_guild_delete", Guild),
+    "CHANNEL_CREATE": ("on_channel_create", Channel),
+    "CHANNEL_UPDATE": ("on_channel_update", Channel),
+    "CHANNEL_DELETE": ("on_channel_delete", Channel),
+    # 频道成员（guild_members）
+    "GUILD_MEMBER_ADD": ("on_guild_member_add", GuildMember),
+    "GUILD_MEMBER_UPDATE": ("on_guild_member_update", GuildMember),
+    "GUILD_MEMBER_REMOVE": ("on_guild_member_remove", GuildMember),
+    # 互动（interaction）
+    "INTERACTION_CREATE": ("on_interaction_create", Interaction),
+    # 消息审核（message_audit）
+    "MESSAGE_AUDIT_PASS": ("on_message_audit_pass", MessageAudit),
+    "MESSAGE_AUDIT_REJECT": ("on_message_audit_reject", MessageAudit),
+    # 论坛（forums）
+    "FORUM_THREAD_CREATE": ("on_forum_thread_create", Thread),
+    "FORUM_THREAD_UPDATE": ("on_forum_thread_update", Thread),
+    "FORUM_THREAD_DELETE": ("on_forum_thread_delete", Thread),
+    "FORUM_POST_CREATE": ("on_forum_post_create", Post),
+    "FORUM_POST_DELETE": ("on_forum_post_delete", Post),
+    "FORUM_REPLY_CREATE": ("on_forum_reply_create", Reply),
+    "FORUM_REPLY_DELETE": ("on_forum_reply_delete", Reply),
+    "FORUM_PUBLISH_AUDIT_RESULT": ("on_forum_publish_audit_result", AuditResult),
+    # 音频（audio_action）
+    "AUDIO_START": ("on_audio_start", Audio),
+    "AUDIO_FINISH": ("on_audio_finish", Audio),
+    "AUDIO_ON_MIC": ("on_audio_on_mic", Audio),
+    "AUDIO_OFF_MIC": ("on_audio_off_mic", Audio),
 }
 
 

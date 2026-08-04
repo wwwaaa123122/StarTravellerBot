@@ -313,10 +313,12 @@ class XCLRClient(QQClient):
             return False
 
     def _adapt_message_for_plugin(self, message: Any, content: str):
+        nickname = self._try_get_nickname(message)
         class AdaptedEvent:
             def __init__(self, msg, text):
                 self.message = text
                 self.user_id = getattr(msg.author, 'member_openid', 'unknown')
+                self.nickname = nickname
                 self.group_id = getattr(msg, 'group_openid', None)
                 self.message_id = getattr(msg, 'id', None)
                 self.self_id = None
@@ -593,6 +595,7 @@ class XCLRClient(QQClient):
             user_openid = message.author.user_openid
 
             nickname = self._try_get_nickname(message)
+            self._record_nickname(user_openid, nickname)
             user_label = f"{nickname}({user_openid})" if nickname else user_openid
             self.logger.info(f"[单聊] 用户 {user_label}: {content}")
 
@@ -644,10 +647,76 @@ class XCLRClient(QQClient):
 
 
     def _try_get_nickname(self, message) -> str:
-        try:
-            return message.author.username or ""
-        except AttributeError:
+        """从事件 author 提取昵称。
+
+        按官方文档 User 对象字段，昵称字段为 ``username``（用户昵称）。
+        群聊/单聊事件体均携带 ``author`` 对象：群聊用 member_openid、
+        单聊用 user_openid 标识用户，两者都带 username。保留
+        member_name/user_name 仅为旧版/兼容兜底。author 可能为 None
+        （如部分系统事件）。
+        """
+        author = getattr(message, "author", None)
+        if author is None:
             return ""
+        for key in ("username", "member_name", "user_name"):
+            try:
+                value = getattr(author, key)
+            except AttributeError:
+                continue
+            if value:
+                return str(value)
+        return ""
+
+    def _record_nickname(self, user_id: str, nickname: str) -> None:
+        """记录用户昵称：写入全局对照表 data/nickname_map.json。
+
+        任何消息事件都会调用（不要求签到），供 webadmin 显示昵称使用；
+        若该用户已有签到记录，同时回填签到数据文件。
+        重复写相同值直接跳过。
+        """
+        if not user_id or not nickname:
+            return
+        self._save_nickname_map(user_id, nickname)
+
+        # 兼容：已有签到记录的用户回填签到文件
+        path = os.path.join(PROJECT_ROOT, "data", "checkin", f"{user_id}.json")
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if data.get("nickname") == nickname:
+                return
+            data["nickname"] = nickname
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            self.logger.info(f"[昵称] {user_id} -> {nickname}")
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    def _save_nickname_map(self, user_id: str, nickname: str) -> None:
+        """把 openid -> 昵称 写入全局对照表 data/nickname_map.json（原子写入）。"""
+        if not user_id or not nickname:
+            return
+        path = os.path.join(PROJECT_ROOT, "data", "nickname_map.json")
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            else:
+                data = {}
+            if not isinstance(data, dict):
+                data = {}
+            if data.get(user_id) == nickname:
+                return
+            data[user_id] = nickname
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, path)
+        except (OSError, json.JSONDecodeError):
+            pass
 
     def _strip_mention(self, content: str) -> str:
         if content.startswith(f"<@!{self.robot.id}>"):
@@ -669,6 +738,7 @@ class XCLRClient(QQClient):
             content = self._strip_mention(content)
 
             nickname = self._try_get_nickname(message)
+            self._record_nickname(member_openid, nickname)
             user_label = f"{nickname}({member_openid})" if nickname else member_openid
             self.logger.info(f"[群聊] 群 {group_openid} 用户 {user_label}: {content}")
 
@@ -720,6 +790,7 @@ class XCLRClient(QQClient):
             group_openid = message.group_openid
 
             nickname = self._try_get_nickname(message)
+            self._record_nickname(member_openid, nickname)
             user_label = f"{nickname}({member_openid})" if nickname else member_openid
             self.logger.info(f"[群聊全量] 群 {group_openid} 用户 {user_label}: {content}")
 

@@ -90,7 +90,22 @@ def main():
         log_level=log_level_value,
         is_sandbox=is_sandbox,
     )
-    
+
+    # 按 config.json 的 webadmin 段同步启动管理后台（守护线程）
+    webadmin_cfg = config.get("webadmin", {}) or {}
+    if webadmin_cfg.get("enabled", True):
+        try:
+            from webadmin.server import start_server
+            start_server(
+                host=webadmin_cfg.get("host"),
+                port=webadmin_cfg.get("port"),
+                password=webadmin_cfg.get("password"),
+            )
+        except Exception as exc:
+            print(f"[webadmin] 管理后台启动失败: {exc}")
+    else:
+        print("[webadmin] 已在 config.json 中禁用（webadmin.enabled=false），跳过启动")
+
     # 运行机器人
     client.run(appid=appid, secret=secret)
 

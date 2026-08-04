@@ -36,19 +36,28 @@ StarTravellerBot/
 │   ├── tts.py               # 语音合成
 │   ├── scheduled_send.py    # 定时群发（含后台任务）
 │   ├── kick.py              # 踢人监控
-│   └── kick_notify.py       # 踢人通知
+│   ├── kick_notify.py       # 踢人通知
+│   ├── bilibili_parse.py    # B站视频解析（封面 + 点赞/投币/收藏数据）
+│   └── douyin_parse.py      # 抖音视频解析（封面 + 点赞/评论/转发数据）
 │
 ├── Tools/                   # 工具模块
 │   ├── core.py              # BotContext 运行上下文 + VERSION_NAME
 │   └── rag_memory.py        # RAGMemory - 基于 TF-IDF 的对话记忆
 │
+├── webadmin/                # Web 管理后台（Flask）
+│   ├── server.py            # 管理后台服务（守护线程启动）
+│   └── static/              # 前端静态资源（HTML/CSS/JS）
+│
 ├── data/                    # 持久化数据
 │   ├── checkin/             # 签到数据（按用户 OpenID 存储）
 │   ├── roles/               # 角色数据
-│   └── rag/                 # RAG 对话历史
+│   ├── rag/                 # RAG 对话历史
+│   └── webadmin/            # 管理后台数据（密钥、访问统计）
 │
 ├── docs/                    # VitePress 文档
-│   └── index.md             # 文档首页
+│   ├── index.md             # 文档首页
+│   ├── tools/               # 工具模块文档（webadmin 等）
+│   └── public/webadmin/     # 管理后台界面截图（webp）
 │
 └── .vitepress/
     └── config.mts           # VitePress 配置

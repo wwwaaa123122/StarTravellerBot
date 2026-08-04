@@ -47,6 +47,7 @@ export default defineConfig({
         text: '工具模块',
         items: [
           { text: '概述', link: '/tools/overview' },
+          { text: 'Web 管理后台', link: '/tools/webadmin' },
         ]
       }],
       '/api/': [{

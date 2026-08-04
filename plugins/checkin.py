@@ -58,7 +58,7 @@ def _init_rank_cache(today: str):
 def _load_data(user_id: str) -> dict:
     """加载用户签到数据"""
     file_path = os.path.join(DATA_DIR, f"{user_id}.json")
-    defaults = {"points": 0, "affection": 0, "last_checkin": None, "streak": 0}
+    defaults = {"points": 0, "affection": 0, "last_checkin": None, "streak": 0, "nickname": ""}
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -133,6 +133,9 @@ async def on_message(event, actions, **kwargs):
     points = random.randint(10, 100)   # 积分
 
     # 更新数据
+    nickname = getattr(event, "nickname", "") or ""
+    if nickname:
+        data["nickname"] = nickname
     data["streak"] = data.get("streak", 0) + 1
     data["affection"] += favor
     data["points"] += points

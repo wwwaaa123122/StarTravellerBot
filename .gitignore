@@ -18,3 +18,6 @@ botpy*
 *.egg-info/
 build/
 dist/
+
+# webadmin 运行时数据（含签名密钥）
+data/webadmin/

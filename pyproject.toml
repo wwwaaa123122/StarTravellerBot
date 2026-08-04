@@ -18,3 +18,7 @@ dependencies = [
 
 [tool.setuptools]
 packages = ["qqbot_openapi"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
