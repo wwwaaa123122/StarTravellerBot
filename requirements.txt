@@ -6,3 +6,6 @@ psutil>=5.9.0
 
 # 插件依赖
 python-whois>=0.9.0
+
+# Web 管理后台
+flask>=3.0,<3.1

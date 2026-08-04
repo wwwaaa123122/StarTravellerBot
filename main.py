@@ -70,6 +70,10 @@ def main():
         "CRITICAL": std_logging.CRITICAL,
     }
     log_level_value = log_level_map.get(log_level.upper(), std_logging.INFO)
+    std_logging.basicConfig(
+        level=log_level_value,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
     
     # 启动信息
     bot_name = config.get("Others", {}).get("bot_name", "星辰旅人")

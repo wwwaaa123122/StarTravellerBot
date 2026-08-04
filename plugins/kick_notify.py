@@ -7,8 +7,7 @@ Kick 开播提醒 - QQ 开放平台插件
 import json
 import asyncio
 import logging
-import urllib.request
-import urllib.error
+import httpx
 
 _logger = logging.getLogger("KickNotify")
 
@@ -18,21 +17,23 @@ HELP_MESSAGE = "Kick 开播监控 (channel: xctraveller, 间隔60秒)"
 _notified: set[str] = set()
 
 
-def _check_live(channel: str) -> tuple[bool, dict | None]:
-    """检查 Kick 主播是否在播。"""
+async def _check_live(channel: str) -> tuple[bool, dict | None]:
+    """检查 Kick 主播是否在播（异步，不阻塞事件循环）。"""
     url = f"https://api.kick.com/private/v1/channels/{channel}/livestream"
-    req = urllib.request.Request(url, headers={
+    headers = {
         "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36",
         "Accept": "application/json",
-    })
+    }
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            body = json.loads(resp.read().decode())
+        async with httpx.AsyncClient(timeout=15.0) as session:
+            resp = await session.get(url, headers=headers)
+            resp.raise_for_status()
+            body = resp.json()
             livestream = body.get("data", {}).get("livestream")
             if livestream and livestream.get("id"):
                 return (False, livestream)
             return (False, None)
-    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError) as e:
+    except (httpx.HTTPError, json.JSONDecodeError, OSError) as e:
         _logger.warning(f"检查 {channel} 失败: {e}")
         return (True, None)
 
@@ -104,7 +105,7 @@ async def background_tasks(client):
     client.logger.info(f"[kick_notify] 开始监控 {channel}，间隔 {interval}s")
 
     # 初始化状态，不发送通知
-    is_error, live_info = _check_live(channel)
+    is_error, live_info = await _check_live(channel)
     if not is_error and live_info:
         _notified.add(channel.lower())
         client.logger.info(f"[kick_notify] {channel}: 已开播 (初始化记录，不通知)")
@@ -114,7 +115,7 @@ async def background_tasks(client):
     while True:
         await asyncio.sleep(interval)
 
-        is_error, live_info = _check_live(channel)
+        is_error, live_info = await _check_live(channel)
         if is_error:
             client.logger.warning(f"[kick_notify] 查询 {channel} 失败，跳过本轮")
             continue

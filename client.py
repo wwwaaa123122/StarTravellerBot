@@ -159,7 +159,7 @@ class XCLRClient(QQClient):
         self.logger.info(f"加载插件: {plugin_name} ({keyword})")
         return True
 
-    def _register_plugin_background_task(self, plugin_name: str, module):
+    def _register_plugin_background_task(self, plugin_name: str, module) -> bool:
         bg_tasks = getattr(module, 'background_tasks', None)
         if callable(bg_tasks):
             self._plugins_bg_tasks.append({
@@ -167,6 +167,8 @@ class XCLRClient(QQClient):
                 'task': bg_tasks,
             })
             self.logger.info(f"插件 {plugin_name} 注册后台任务")
+            return True
+        return False
 
     def _load_plugins(self):
         plugin_dir = os.path.join(PROJECT_ROOT, "plugins")
@@ -185,9 +187,10 @@ class XCLRClient(QQClient):
             plugin_name = filename[:-3]
             try:
                 plugin_name, module = self._load_plugin_module(plugin_dir, filename)
-                if not self._register_plugin(plugin_name, module):
-                    self.logger.warning(f"插件 {plugin_name} 缺少 TRIGGHT_KEYWORD 或 on_message")
-                self._register_plugin_background_task(plugin_name, module)
+                registered = self._register_plugin(plugin_name, module)
+                has_bg_task = self._register_plugin_background_task(plugin_name, module)
+                if not registered and not has_bg_task:
+                    self.logger.warning(f"插件 {plugin_name} 缺少 TRIGGHT_KEYWORD/on_message 且无 background_tasks，已跳过")
             except Exception as e:
                 self.logger.error(f"加载插件 {plugin_name} 失败: {e}")
                 self.logger.error(traceback.format_exc())
