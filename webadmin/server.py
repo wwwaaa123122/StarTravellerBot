@@ -553,17 +553,11 @@ def _resolve_admin_addr(host=None, port=None):
 
 
 def _print_banner(host, port):
-    print("=" * 56)
-    print("  StarTraveller 管理后台 v%s" % VERSION)
     if host in ("0.0.0.0", "::"):
-        print("  监听地址 : 所有网卡 :%d  (http://服务器IP:%d/admin)" % (port, port))
-        print("  ! 正在监听所有网卡，访问时不校验端口，请确认已设置强密码")
+        addr = "http://服务器IP:%d/admin" % port
     else:
-        print("  监听地址 : http://%s:%d/admin" % (host, port))
-    if admin_password() == "admin123":
-        print("  ! 正在使用默认密码 admin123，建议尽快修改")
-    print("  机器人   : %s" % ("运行中" if _bot_process()["running"] else "未运行"))
-    print("=" * 56)
+        addr = "http://%s:%d/admin" % (host, port)
+    print("StarTraveller 管理后台 v%s  %s" % (VERSION, addr))
 
 
 def start_server(host=None, port=None, password=None):

@@ -139,24 +139,33 @@ class XCLRClient(QQClient):
         return plugin_name, module
 
     def _register_plugin(self, plugin_name: str, module) -> bool:
-        keyword = getattr(module, 'TRIGGHT_KEYWORD', None)
         help_msg = getattr(module, 'HELP_MESSAGE', '')
         on_message = getattr(module, 'on_message', None)
-
-        if not keyword or not callable(on_message):
+        if not callable(on_message):
             return False
 
-        keyword = keyword.strip()
+        # 优先使用 TRIGGHT_KEYWORDS（多关键字），否则回退 TRIGGHT_KEYWORD
+        keywords = getattr(module, 'TRIGGHT_KEYWORDS', None)
+        if keywords:
+            keywords = [str(k).strip() for k in keywords if str(k).strip()]
+        else:
+            keyword = getattr(module, 'TRIGGHT_KEYWORD', None)
+            keywords = [keyword.strip()] if keyword and keyword.strip() else []
+        if not keywords:
+            return False
+
+        keyword = keywords[0]
         self._plugins.append({
             'name': plugin_name,
             'keyword': keyword,
+            'keywords': keywords,
             'help': help_msg,
             'module': module,
             'on_message': on_message,
-            'is_any': keyword == 'Any',
+            'is_any': 'Any' in keywords,
         })
         self._plugins_help[plugin_name] = help_msg
-        self.logger.info(f"加载插件: {plugin_name} ({keyword})")
+        self.logger.info(f"加载插件: {plugin_name} ({'/'.join(keywords)})")
         return True
 
     def _register_plugin_background_task(self, plugin_name: str, module) -> bool:
@@ -195,7 +204,7 @@ class XCLRClient(QQClient):
                 self.logger.error(f"加载插件 {plugin_name} 失败: {e}")
                 self.logger.error(traceback.format_exc())
 
-        self._plugins.sort(key=lambda p: (p['is_any'], -len(p['keyword']), p['name']))
+        self._plugins.sort(key=lambda p: (p['is_any'], -max(len(k) for k in p['keywords']), p['name']))
         self.logger.info(f"插件加载完成: {len(self._plugins)} 个命令插件, {len(self._plugins_bg_tasks)} 个后台任务")
 
     async def _start_plugin_background_tasks(self):
@@ -223,11 +232,11 @@ class XCLRClient(QQClient):
         for plugin in self._plugins:
             if plugin['name'] in skip_plugins:
                 continue
-            if not plugin['is_any'] and not order.startswith(plugin['keyword']):
+            if not plugin['is_any'] and not any(order.startswith(kw) for kw in plugin['keywords']):
                 continue
 
             log_action = "尝试" if plugin['is_any'] else "匹配到"
-            self.logger.info(f"[插件] {log_action}插件: {plugin['name']}, 关键字: {plugin['keyword']}")
+            self.logger.info(f"[插件] {log_action}插件: {plugin['name']}, 关键字: {'/'.join(plugin['keywords'])}")
             result = await self._execute_plugin(plugin, message, order)
             if result:
                 return True

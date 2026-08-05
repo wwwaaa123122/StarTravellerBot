@@ -4,7 +4,8 @@ import logging
 _logger = logging.getLogger("mc_status")
 import logging
 
-TRIGGHT_KEYWORD = "Any"
+TRIGGHT_KEYWORD = "mc状态"
+TRIGGHT_KEYWORDS = ["mc状态", "我的世界状态", "minecraft状态", "jv状态"]
 HELP_MESSAGE = "mc状态 <服务器地址> -> 查询 MC 服务器状态"
 
 DOMAIN = re.compile(r"^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|(?:\d{1,3}\.){3}\d{1,3})(?::\d+)?$")

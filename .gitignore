@@ -19,5 +19,5 @@ botpy*
 build/
 dist/
 
-# webadmin 运行时数据（含签名密钥）
-data/webadmin/
+# 运行时数据（签到、角色、RAG、webadmin 等）
+data/
