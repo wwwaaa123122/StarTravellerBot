@@ -9,7 +9,8 @@
 import os
 import sys
 import json
-import logging
+
+from loguru import logger
 
 # 当前仓库即项目根目录
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -20,8 +21,51 @@ os.chdir(PROJECT_ROOT)
 # 将项目根目录添加到 path
 sys.path.insert(0, PROJECT_ROOT)
 
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+def _load_env_file():
+    """加载项目根目录下的 .env 文件到 os.environ（不覆盖已有环境变量）。"""
+    env_path = os.path.join(PROJECT_ROOT, ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+def _inject_env_secrets(config: dict) -> dict:
+    """将环境变量中的敏感值注入 config 字典（优先级高于 config.json）。"""
+    others = config.setdefault("Others", {})
+
+    env_map = {
+        "STAR_DEEPSEEK_KEY": ("Others", "deepseek_key"),
+        "STAR_GEMINI_KEY": ("Others", "gemini_key"),
+        "STAR_OPENAI_KEY": ("Others", "openai_key"),
+        "STAR_AI_BASE_URL": ("Others", "ai_base_url"),
+        "STAR_AI_MODEL": ("Others", "ai_model"),
+        "STAR_AI_MAX_TOKENS": ("Others", "ai_max_tokens"),
+        "STAR_AI_TEMPERATURE": ("Others", "ai_temperature"),
+    }
+
+    for env_key, (section, cfg_key) in env_map.items():
+        val = os.environ.get(env_key)
+        if val:
+            if section == "Others":
+                try:
+                    others[cfg_key] = int(val)
+                except ValueError:
+                    try:
+                        others[cfg_key] = float(val)
+                    except ValueError:
+                        others[cfg_key] = val
+
+    return config
 
 # 抑制 pynvml 弃用警告
 import warnings
@@ -36,8 +80,6 @@ from client import XCLRClient
 
 sys.stdout = _old_stdout
 
-import logging as std_logging
-
 
 def load_config() -> dict:
     """加载项目根目录下的 config.json 配置文件"""
@@ -48,50 +90,39 @@ def load_config() -> dict:
 
 def main():
     """主入口函数"""
+    # 加载 .env 环境变量
+    _load_env_file()
+
     # 加载主配置
     config = load_config()
-    
-    # 从 config.json 读取 QQ 开放平台凭证
-    openqq = config.get("OpenQQ", {})
-    appid = openqq.get("appid")
-    secret = openqq.get("secret")
-    
-    if not appid or not secret:
-        print("错误: 请在 config.json 中配置 OpenQQ.appid 和 OpenQQ.secret")
-        sys.exit(1)
-    
-    # 设置日志级别
+
+    # 注入环境变量中的敏感值
+    config = _inject_env_secrets(config)
+
+    # 初始化日志系统
+    from Tools.logger import setup_logging
     log_level = config.get("Log_level", "INFO")
-    log_level_map = {
-        "DEBUG": std_logging.DEBUG,
-        "INFO": std_logging.INFO,
-        "WARNING": std_logging.WARNING,
-        "ERROR": std_logging.ERROR,
-        "CRITICAL": std_logging.CRITICAL,
-    }
-    log_level_value = log_level_map.get(log_level.upper(), std_logging.INFO)
-    std_logging.basicConfig(
-        level=log_level_value,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-    
+    setup_logging(log_level)
+
+    # 从环境变量或 config.json 读取 QQ 开放平台凭证
+    appid = os.environ.get("STAR_QO_APPID") or config.get("OpenQQ", {}).get("appid")
+    secret = os.environ.get("STAR_QO_SECRET") or config.get("OpenQQ", {}).get("secret")
+
+    if not appid or not secret:
+        logger.error("请设置 STAR_QO_APPID / STAR_QO_SECRET 环境变量，或在 config.json 中配置 OpenQQ")
+        sys.exit(1)
+
     # 启动信息
     bot_name = config.get("Others", {}).get("bot_name", "星辰旅人")
     from Tools.core import VERSION_NAME
     version = VERSION_NAME
-
-    print(f"""
-╔══════════════════════════════════════════════════════════════════╗
-║                    {bot_name} - QQ 开放平台机器人                ║
-║                         Version: {version}                       ║
-╚══════════════════════════════════════════════════════════════════╝
-""")
+    logger.info(f"{bot_name} - QQ 开放平台机器人 v{version} 正在启动")
     
     # 创建客户端
     is_sandbox = config.get("OpenQQ", {}).get("sandbox", False)
     client = XCLRClient(
         config=config,
-        log_level=log_level_value,
+        log_level=getattr(__import__("logging"), log_level.upper(), 20),
         is_sandbox=is_sandbox,
     )
 
@@ -103,12 +134,12 @@ def main():
             start_server(
                 host=webadmin_cfg.get("host"),
                 port=webadmin_cfg.get("port"),
-                password=webadmin_cfg.get("password"),
+                password=os.environ.get("STAR_TRAVELLER_ADMIN_PASSWORD") or webadmin_cfg.get("password"),
             )
         except Exception as exc:
-            print(f"[webadmin] 管理后台启动失败: {exc}")
+            logger.error(f"管理后台启动失败: {exc}")
     else:
-        print("[webadmin] 已在 config.json 中禁用（webadmin.enabled=false），跳过启动")
+        logger.info("管理后台已在 config.json 中禁用，跳过启动")
 
     # 运行机器人
     client.run(appid=appid, secret=secret)

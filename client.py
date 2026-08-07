@@ -35,6 +35,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from Tools.core import BotContext, VERSION_NAME
 from Tools.rag_memory import RAGMemory
+from Tools.scheduler import get_scheduler, shutdown as shutdown_scheduler
 from ai.role_manager import RoleManager
 from ai.chat import AIChat
 
@@ -81,9 +82,11 @@ class XCLRClient(QQClient):
 
         self._plugins = []
         self._plugins_help = {}
-        self._plugins_bg_tasks = []
+        self._scheduler = None
 
         self.rag = RAGMemory(os.path.join(PROJECT_ROOT, "data"))
+
+        self._stats_file = os.path.join(PROJECT_ROOT, "data", "stats.json")
 
         self.logger = logging.get_logger()
 
@@ -107,6 +110,7 @@ class XCLRClient(QQClient):
         return self._http_client_instance
 
     async def close(self):
+        shutdown_scheduler()
         if hasattr(self, '_http_client_instance') and not self._http_client_instance.is_closed:
             await self._http_client_instance.aclose()
         await super().close()
@@ -120,7 +124,7 @@ class XCLRClient(QQClient):
         self.logger.info(f"{'='*50}")
 
         self._load_plugins()
-        await self._start_plugin_background_tasks()
+        await self._start_scheduler()
 
     @staticmethod
     def _is_plugin_file(filename: str) -> bool:
@@ -168,14 +172,13 @@ class XCLRClient(QQClient):
         self.logger.info(f"加载插件: {plugin_name} ({'/'.join(keywords)})")
         return True
 
-    def _register_plugin_background_task(self, plugin_name: str, module) -> bool:
-        bg_tasks = getattr(module, 'background_tasks', None)
-        if callable(bg_tasks):
-            self._plugins_bg_tasks.append({
-                'name': plugin_name,
-                'task': bg_tasks,
-            })
-            self.logger.info(f"插件 {plugin_name} 注册后台任务")
+    def _register_plugin_scheduled_jobs(self, plugin_name: str, module) -> bool:
+        """注册插件定时任务（通过 APScheduler）"""
+        register_fn = getattr(module, 'register_scheduled_jobs', None)
+        if callable(register_fn):
+            scheduler = get_scheduler()
+            register_fn(scheduler)
+            self.logger.info(f"插件 {plugin_name} 注册定时任务")
             return True
         return False
 
@@ -183,7 +186,6 @@ class XCLRClient(QQClient):
         plugin_dir = os.path.join(PROJECT_ROOT, "plugins")
         self._plugins.clear()
         self._plugins_help.clear()
-        self._plugins_bg_tasks.clear()
 
         if not os.path.exists(plugin_dir):
             self.logger.warning(f"插件目录不存在: {plugin_dir}")
@@ -197,20 +199,23 @@ class XCLRClient(QQClient):
             try:
                 plugin_name, module = self._load_plugin_module(plugin_dir, filename)
                 registered = self._register_plugin(plugin_name, module)
-                has_bg_task = self._register_plugin_background_task(plugin_name, module)
-                if not registered and not has_bg_task:
-                    self.logger.warning(f"插件 {plugin_name} 缺少 TRIGGHT_KEYWORD/on_message 且无 background_tasks，已跳过")
+                has_scheduled = self._register_plugin_scheduled_jobs(plugin_name, module)
+                if not registered and not has_scheduled:
+                    self.logger.warning(f"插件 {plugin_name} 缺少 TRIGGHT_KEYWORD/on_message 且无 register_scheduled_jobs，已跳过")
             except Exception as e:
                 self.logger.error(f"加载插件 {plugin_name} 失败: {e}")
                 self.logger.error(traceback.format_exc())
 
         self._plugins.sort(key=lambda p: (p['is_any'], -max(len(k) for k in p['keywords']), p['name']))
-        self.logger.info(f"插件加载完成: {len(self._plugins)} 个命令插件, {len(self._plugins_bg_tasks)} 个后台任务")
+        self.logger.info(f"插件加载完成: {len(self._plugins)} 个命令插件")
 
-    async def _start_plugin_background_tasks(self):
-        for bg in self._plugins_bg_tasks:
-            self.logger.info(f"启动插件后台任务: {bg['name']}")
-            asyncio.create_task(bg['task'](self))
+    async def _start_scheduler(self):
+        """启动 APScheduler 调度器，注入客户端引用"""
+        scheduler = get_scheduler()
+        scheduler._client = self
+        scheduler.start()
+        job_count = len(scheduler.get_jobs())
+        self.logger.info(f"调度器已启动，共 {job_count} 个定时任务")
 
     async def _try_plugins(self, message: Any, order: str, skip_plugins: Optional[set] = None) -> bool:
         """
@@ -355,27 +360,45 @@ class XCLRClient(QQClient):
                     if content:
                         await client._send_message(message, content)
 
-            async def send_file(self, url: str, file_type: int = 1):
-                group_openid = getattr(self._message, 'group_openid', None)
+            async def send_file(self, url: str = None, file_type: int = 1,
+                                file=None, filename: str = None):
+                """发送文件（网络URL 或 BytesIO 本地文件）
+
+                用法:
+                    actions.send_file(url="https://...")       # 网络文件（先下载再 base64 发送）
+                    actions.send_file(file=buf, filename="x.png")  # 本地 BytesIO
+                """
+                import base64
                 try:
-                    if group_openid:
-                        await self._client.api.post_group_file(
-                            group_openid=group_openid,
-                            file_type=file_type,
-                            url=url,
-                            srv_send_msg=True,
-                        )
+                    if file is not None and hasattr(file, 'read'):
+                        data = file.read()
+                    elif url:
+                        import httpx
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.get(url, timeout=30)
+                            resp.raise_for_status()
+                            data = resp.content
                     else:
-                        await self._client.api.post_c2c_file(
-                            openid=self._message.author.user_openid,
-                            file_type=file_type,
-                            url=url,
-                            srv_send_msg=True,
-                        )
+                        raise ValueError("必须提供 url 或 file 参数")
+
+                    file_b64 = base64.b64encode(data).decode("utf-8")
+                    from qqbot_openapi import Route
+                    group_openid = getattr(self._message, 'group_openid', None)
+                    payload = {
+                        "file_type": file_type,
+                        "file_data": file_b64,
+                        "srv_send_msg": True,
+                    }
+                    if group_openid:
+                        route = Route("POST", "/v2/groups/{group_openid}/files",
+                                     group_openid=group_openid)
+                    else:
+                        route = Route("POST", "/v2/users/{openid}/files",
+                                     openid=self._message.author.user_openid)
+                    await self._client.api._http.request(route, json=payload)
+                    self._client.logger.info(f"文件发送成功: {filename or url or '(bytesio)'}")
                 except Exception as e:
                     self._client.logger.error(f"发送文件失败: {e}")
-                    await self.send(content=f"发送文件失败: {e}")
-
             async def send_local_file(self, file_path: str, file_type: int = 1):
                 """发送本地文件（base64 编码直接上传）"""
                 import base64
@@ -561,17 +584,28 @@ class XCLRClient(QQClient):
             await self._send_message(message, status)
 
     async def _handle_ai_chat(self, message, order, user_id, user_name, use_markdown=False):
-        """统一的 AI 对话处理"""
-        if use_markdown:
-            send_func = lambda text: message.reply(markdown={"content": text})
-            await self.ai_chat.handle_message(order, user_id, user_name, send_func)
-        else:
-            result = await self.ai_chat.run(user_id, user_name, order)
+        """统一的 AI 对话处理（支持 Function Calling）"""
+        async def execute_tool(tool_name, arguments):
+            from ai.function_calling import execute_tool
+            return await execute_tool(tool_name, arguments, user_id,
+                                      self.root_users, self.config, self)
+        try:
+            result = await self.ai_chat.run_with_tools(
+                user_id, user_name, order, execute_tool, self.root_users)
             if result:
-                await self._send_message(message, result)
-                asyncio.create_task(self._try_send_tts(message, result))
+                usage = self.ai_chat._last_usage or {}
+                self._record_ai_call(usage.get("total_tokens", 0))
+                if use_markdown:
+                    await message.reply(markdown={"content": result})
+                else:
+                    await self._send_message(message, result)
+                    asyncio.create_task(self._try_send_tts(message, result))
             else:
                 await self._send_message(message, "AI 服务暂时不可用")
+        except Exception as e:
+            self.logger.error(f"AI 对话错误: {traceback.format_exc()}")
+            self.logger.error(f"AI 对话错误: {e}")
+            await self._send_message(message, f"AI 服务异常，请稍后再试\n联系管理员: {CONTACT_URL}")
 
     async def _try_send_tts(self, message, text: str):
         """尝试为 AI 回复生成并发送语音"""
@@ -610,6 +644,8 @@ class XCLRClient(QQClient):
             self._record_nickname(user_openid, nickname)
             user_label = f"{nickname}({user_openid})" if nickname else user_openid
             self.logger.info(f"[单聊] 用户 {user_label}: {content}")
+
+            self._record_message()
 
             if not content:
                 await self._send_message(message, f"你好呀~ 我是{self.bot_name}，有什么可以帮你的吗？")
@@ -690,20 +726,78 @@ class XCLRClient(QQClient):
             return
         self._save_nickname_map(user_id, nickname)
 
-        # 兼容：已有签到记录的用户回填签到文件
-        path = os.path.join(PROJECT_ROOT, "data", "checkin", f"{user_id}.json")
-        if not os.path.exists(path):
+        # 兼容：已有签到记录的用户回填签到数据库
+        db_path = os.path.join(PROJECT_ROOT, "data", "checkin.db")
+        if not os.path.exists(db_path):
             return
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if data.get("nickname") == nickname:
-                return
-            data["nickname"] = nickname
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                "UPDATE checkin SET nickname = ? WHERE user_id = ? AND (nickname IS NULL OR nickname = '')",
+                (nickname, user_id),
+            )
+            conn.commit()
+            conn.close()
             self.logger.info(f"[昵称] {user_id} -> {nickname}")
+        except Exception:
+            pass
+
+    def _load_stats(self) -> dict:
+        """加载统计数据"""
+        today = time.strftime("%Y-%m-%d")
+        default = {
+            "total_messages": 0,
+            "messages_today": {"date": today, "count": 0},
+            "total_ai_calls": 0,
+            "ai_calls_today": {"date": today, "count": 0},
+            "total_tokens": 0,
+            "tokens_today": {"date": today, "count": 0},
+        }
+        try:
+            if os.path.exists(self._stats_file):
+                with open(self._stats_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for key in ("messages_today", "ai_calls_today", "tokens_today"):
+                    if data.get(key, {}).get("date") != today:
+                        data[key] = {"date": today, "count": 0}
+                return data
         except (OSError, json.JSONDecodeError):
+            pass
+        return default
+
+    def _save_stats(self, data: dict):
+        """原子写入统计数据"""
+        try:
+            os.makedirs(os.path.dirname(self._stats_file), exist_ok=True)
+            tmp = self._stats_file + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, self._stats_file)
+        except OSError:
+            pass
+
+    def _record_message(self):
+        """记录一条消息（由消息处理器调用）"""
+        try:
+            stats = self._load_stats()
+            stats["total_messages"] += 1
+            stats["messages_today"]["count"] += 1
+            self._save_stats(stats)
+        except Exception:
+            pass
+
+    def _record_ai_call(self, token_count: int = 0):
+        """记录一次 AI 调用及 token 消耗"""
+        try:
+            stats = self._load_stats()
+            stats["total_ai_calls"] += 1
+            stats["ai_calls_today"]["count"] += 1
+            if token_count > 0:
+                stats["total_tokens"] += token_count
+                stats["tokens_today"]["count"] += token_count
+            self._save_stats(stats)
+        except Exception:
             pass
 
     def _save_nickname_map(self, user_id: str, nickname: str) -> None:
@@ -753,6 +847,8 @@ class XCLRClient(QQClient):
             self._record_nickname(member_openid, nickname)
             user_label = f"{nickname}({member_openid})" if nickname else member_openid
             self.logger.info(f"[群聊] 群 {group_openid} 用户 {user_label}: {content}")
+
+            self._record_message()
 
             if not content:
                 await self._send_message(message, f"发送 @机器人 /帮助 查看可用指令")
@@ -805,6 +901,8 @@ class XCLRClient(QQClient):
             self._record_nickname(member_openid, nickname)
             user_label = f"{nickname}({member_openid})" if nickname else member_openid
             self.logger.info(f"[群聊全量] 群 {group_openid} 用户 {user_label}: {content}")
+
+            self._record_message()
 
             if not content:
                 return
@@ -859,6 +957,8 @@ class XCLRClient(QQClient):
             user_label = f"{nickname}({user_id})" if nickname else user_id
             self.logger.info(f"[频道私信] 用户 {user_label}: {content}")
 
+            self._record_message()
+
             if not content:
                 await message.reply(content=f"你好呀~ 我是{self.bot_name}，有什么可以帮你的吗？")
                 return
@@ -907,6 +1007,8 @@ class XCLRClient(QQClient):
             nickname = self._try_get_nickname(message)
             user_label = f"{nickname}({user_id})" if nickname else user_id
             self.logger.info(f"[频道] 频道 {message.channel_id} 用户 {user_label}: {content}")
+
+            self._record_message()
 
             if not content:
                 help_text = self._get_help_text()
