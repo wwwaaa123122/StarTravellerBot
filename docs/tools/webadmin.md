@@ -1,6 +1,6 @@
 ---
 prev:
-  text: '概述'
+  text: '工具概述'
   link: '/tools/overview'
 next:
   text: 'API 参考'

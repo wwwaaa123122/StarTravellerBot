@@ -1,10 +1,10 @@
 ---
 prev:
+  text: '快速开始'
+  link: '/guide/getting-started'
+next:
   text: '项目结构'
   link: '/guide/structure'
-next:
-  text: '插件开发'
-  link: '/plugins/introduction'
 ---
 
 # 消息场景

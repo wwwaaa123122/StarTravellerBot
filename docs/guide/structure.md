@@ -1,10 +1,10 @@
 ---
 prev:
-  text: '快速开始'
-  link: '/guide/getting-started'
-next:
   text: '消息场景'
   link: '/guide/scenarios'
+next:
+  text: 'AI 对话'
+  link: '/ai/chat'
 ---
 
 # 项目结构

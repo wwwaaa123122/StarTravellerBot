@@ -1,7 +1,7 @@
 ---
 prev:
-  text: '内置插件'
-  link: '/plugins/builtin'
+  text: '项目结构'
+  link: '/guide/structure'
 next:
   text: '角色系统'
   link: '/ai/roleplay'

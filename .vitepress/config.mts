@@ -15,48 +15,24 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: '首页', link: '/' },
-      { text: '指南', link: '/guide/getting-started' },
-      { text: '插件', link: '/plugins/introduction' },
-      { text: 'AI模块', link: '/ai/chat' },
+      { text: '快速开始', link: '/guide/getting-started' },
     ],
 
-    sidebar: {
-      '/guide/': [{
-        text: '指南',
-        items: [
-          { text: '快速开始', link: '/guide/getting-started' },
-          { text: '项目结构', link: '/guide/structure' },
-          { text: '消息场景', link: '/guide/scenarios' },
-        ]
-      }],
-      '/plugins/': [{
-        text: '插件系统',
-        items: [
-          { text: '插件开发', link: '/plugins/introduction' },
-          { text: '内置插件', link: '/plugins/builtin' },
-        ]
-      }],
-      '/ai/': [{
-        text: 'AI 模块',
-        items: [
-          { text: 'AI 对话', link: '/ai/chat' },
-          { text: '角色系统', link: '/ai/roleplay' },
-        ]
-      }],
-      '/tools/': [{
-        text: '工具模块',
-        items: [
-          { text: '概述', link: '/tools/overview' },
-          { text: 'Web 管理后台', link: '/tools/webadmin' },
-        ]
-      }],
-      '/api/': [{
-        text: 'API 参考',
-        items: [
-          { text: 'API 参考', link: '/api/reference' },
-        ]
-      }],
-    },
+    sidebar: [{
+      text: '快速开始',
+      items: [
+        { text: '快速开始', link: '/guide/getting-started' },
+        { text: '消息场景', link: '/guide/scenarios' },
+        { text: '项目结构', link: '/guide/structure' },
+        { text: 'AI 对话', link: '/ai/chat' },
+        { text: '角色系统', link: '/ai/roleplay' },
+        { text: '插件开发', link: '/plugins/introduction' },
+        { text: '内置插件', link: '/plugins/builtin' },
+        { text: '工具概述', link: '/tools/overview' },
+        { text: 'Web 管理后台', link: '/tools/webadmin' },
+        { text: 'API 参考', link: '/api/reference' },
+      ]
+    }],
 
     socialLinks: [
       { icon: 'github', link: 'https://github.com/wwwaaa123122/StarTravellerBot' }

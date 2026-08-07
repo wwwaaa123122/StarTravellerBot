@@ -1,10 +1,10 @@
 ---
 prev:
-  text: '角色系统'
-  link: '/ai/roleplay'
+  text: '内置插件'
+  link: '/plugins/builtin'
 next:
-  text: 'API 参考'
-  link: '/api/reference'
+  text: 'Web 管理后台'
+  link: '/tools/webadmin'
 ---
 
 # 工具模块

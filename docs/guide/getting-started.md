@@ -1,7 +1,7 @@
 ---
 next:
-  text: '项目结构'
-  link: '/guide/structure'
+  text: '消息场景'
+  link: '/guide/scenarios'
 ---
 
 # 快速开始

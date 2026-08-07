@@ -3,8 +3,8 @@ prev:
   text: '插件开发'
   link: '/plugins/introduction'
 next:
-  text: 'AI 对话'
-  link: '/ai/chat'
+  text: '工具概述'
+  link: '/tools/overview'
 ---
 
 # 内置插件

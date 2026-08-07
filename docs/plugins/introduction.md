@@ -1,7 +1,7 @@
 ---
 prev:
-  text: '消息场景'
-  link: '/guide/scenarios'
+  text: '角色系统'
+  link: '/ai/roleplay'
 next:
   text: '内置插件'
   link: '/plugins/builtin'

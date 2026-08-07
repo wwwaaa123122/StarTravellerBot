@@ -1,7 +1,7 @@
 ---
 prev:
-  text: '工具模块'
-  link: '/tools/overview'
+  text: 'Web 管理后台'
+  link: '/tools/webadmin'
 ---
 
 # API 参考
