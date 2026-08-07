@@ -1,5 +1,5 @@
 <script setup>
-import { Odometer, User, Collection, Grid, AlarmClock, Setting, SwitchButton } from "@element-plus/icons-vue";
+import { Odometer, User, Collection, Grid, Lock, AlarmClock, MagicStick, Tickets, Setting, SwitchButton } from "@element-plus/icons-vue";
 import { store, logout } from "../store";
 
 defineProps({ collapsed: Boolean });
@@ -10,7 +10,10 @@ const menus = [
   { key: "users", label: "用户管理", icon: User },
   { key: "memory", label: "记忆库", icon: Collection },
   { key: "plugins", label: "插件管理", icon: Grid },
+  { key: "permissions", label: "权限管理", icon: Lock },
   { key: "schedule", label: "定时任务", icon: AlarmClock },
+  { key: "ai-settings", label: "AI 设置", icon: MagicStick },
+  { key: "prompts", label: "Prompt 管理", icon: Tickets },
   { key: "settings", label: "系统设置", icon: Setting },
 ];
 

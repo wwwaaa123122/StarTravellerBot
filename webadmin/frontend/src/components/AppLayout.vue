@@ -8,7 +8,10 @@ import DashboardView from "./views/DashboardView.vue";
 import UsersView from "./views/UsersView.vue";
 import MemoryView from "./views/MemoryView.vue";
 import PluginsView from "./views/PluginsView.vue";
+import PermissionsView from "./views/PermissionsView.vue";
 import ScheduleView from "./views/ScheduleView.vue";
+import AISettingsView from "./views/AISettingsView.vue";
+import PromptsView from "./views/PromptsView.vue";
 import SettingsView from "./views/SettingsView.vue";
 
 const views = {
@@ -16,7 +19,10 @@ const views = {
   users: UsersView,
   memory: MemoryView,
   plugins: PluginsView,
+  permissions: PermissionsView,
   schedule: ScheduleView,
+  "ai-settings": AISettingsView,
+  prompts: PromptsView,
   settings: SettingsView,
 };
 

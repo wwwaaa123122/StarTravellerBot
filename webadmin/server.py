@@ -24,6 +24,7 @@ import os
 import platform
 import re
 import secrets
+import sqlite3
 import sys
 import time
 from functools import wraps
@@ -46,6 +47,9 @@ WEBADMIN_DATA_DIR = os.path.join(DATA_DIR, "webadmin")
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 SECRET_FILE = os.path.join(WEBADMIN_DATA_DIR, "secret.key")
 VISITS_FILE = os.path.join(WEBADMIN_DATA_DIR, "visits.json")
+STATS_FILE = os.path.join(DATA_DIR, "stats.json")
+PLUGINS_ENABLED_FILE = os.path.join(DATA_DIR, "plugins_enabled.json")
+PROMPTS_FILE = os.path.join(DATA_DIR, "prompts.json")
 CONFIG_FILE = None
 
 VERSION = "0.1.0"
@@ -115,29 +119,28 @@ def _nickname_map():
 
 
 def _checkin_users():
-    """解析 data/checkin/*.json，返回用户列表（排除 _rank_cache.json）。
+    """从 SQLite checkin.db 读取用户列表，按积分降序排列。
 
     昵称优先取签到数据，为空时回退到全局昵称对照表。
     """
     nick_map = _nickname_map()
+    db_path = os.path.join(DATA_DIR, "checkin.db")
+    if not os.path.exists(db_path):
+        return []
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
     users = []
-    if not os.path.isdir(CHECKIN_DIR):
-        return users
-    for name in sorted(os.listdir(CHECKIN_DIR)):
-        if not name.endswith(".json") or name.startswith("_"):
-            continue
-        uid = name[:-5]
-        data = _read_json(os.path.join(CHECKIN_DIR, name), {}) or {}
-        nickname = data.get("nickname", "") or nick_map.get(uid, "") or ""
+    for row in conn.execute("SELECT * FROM checkin ORDER BY points DESC"):
+        nickname = row["nickname"] or nick_map.get(row["user_id"], "") or ""
         users.append({
-            "user_id": uid,
-            "nickname": nickname,
-            "points": int(data.get("points", 0)),
-            "affection": int(data.get("affection", 0)),
-            "streak": int(data.get("streak", 0)),
-            "last_checkin": data.get("last_checkin", None),
+            "user_id": row["user_id"],
+            "nickname": str(nickname),
+            "points": int(row["points"]),
+            "affection": int(row["affection"]),
+            "streak": int(row["streak"]),
+            "last_checkin": row["last_checkin"],
         })
-    users.sort(key=lambda u: u["points"], reverse=True)
+    conn.close()
     return users
 
 
@@ -273,6 +276,32 @@ def _system_status():
     }
 
 
+def _read_stats():
+    """读取机器人统计信息（由 client.py 写入）。"""
+    default = {
+        "total_messages": 0,
+        "messages_today": {"date": time.strftime("%Y-%m-%d"), "count": 0},
+        "total_ai_calls": 0,
+        "ai_calls_today": {"date": time.strftime("%Y-%m-%d"), "count": 0},
+        "total_tokens": 0,
+        "tokens_today": {"date": time.strftime("%Y-%m-%d"), "count": 0},
+    }
+    data = _read_json(STATS_FILE, default) or default
+    today = time.strftime("%Y-%m-%d")
+    for key in ("messages_today", "ai_calls_today", "tokens_today"):
+        if data.get(key, {}).get("date") != today:
+            data[key] = {"date": today, "count": 0}
+    return data
+
+
+def _read_plugins_enabled():
+    return _read_json(PLUGINS_ENABLED_FILE, {}) or {}
+
+
+def _read_prompts():
+    return _read_json(PROMPTS_FILE, {"prompts": {}}) or {"prompts": {}}
+
+
 def _uptime_text(seconds):
     d, r = divmod(int(seconds), 86400)
     h, r = divmod(r, 3600)
@@ -402,6 +431,7 @@ def api_overview():
 
     visit = _visit_activity(14)
     bot = _bot_process()
+    bot_stats = _read_stats()
     return jsonify({
         "stats": {
             "users": len(users),
@@ -412,6 +442,12 @@ def api_overview():
             "plugins": len(_scan_plugins()),
             "visits": visit["total"],
             "last_checkin": max((u["last_checkin"] for u in users if u["last_checkin"]), default=None),
+            "total_messages": bot_stats["total_messages"],
+            "messages_today": bot_stats["messages_today"]["count"],
+            "total_ai_calls": bot_stats["total_ai_calls"],
+            "ai_calls_today": bot_stats["ai_calls_today"]["count"],
+            "total_tokens": bot_stats["total_tokens"],
+            "tokens_today": bot_stats["tokens_today"]["count"],
         },
         "trend": days,
         "activity": visit["days"],
@@ -437,8 +473,15 @@ def api_users():
     role_names = roles["roles"]
     for u in users:
         u["role"] = role_names.get(roles["users"].get(u["user_id"]), "默认")
-    rank_cache = _read_json(os.path.join(CHECKIN_DIR, "_rank_cache.json"), {}) or {}
-    return jsonify({"users": users, "rank_meta": rank_cache if isinstance(rank_cache, dict) else {}})
+    rank_meta = {}
+    db_path = os.path.join(DATA_DIR, "checkin.db")
+    if os.path.exists(db_path):
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        for row in conn.execute("SELECT last_checkin, COUNT(*) as cnt FROM checkin WHERE last_checkin IS NOT NULL GROUP BY last_checkin"):
+            rank_meta[row["last_checkin"]] = row["cnt"]
+        conn.close()
+    return jsonify({"users": users, "rank_meta": rank_meta})
 
 
 @app.get("/admin/api/memory")
@@ -518,6 +561,183 @@ def _mask_dict(obj, depth=0):
     if isinstance(obj, list):
         return [_mask_dict(x, depth + 1) if isinstance(x, (dict, list)) else x for x in obj]
     return obj
+
+
+# ---------------------------------------------------------------- Stats
+
+@app.get("/admin/api/stats")
+@require_auth
+def api_stats():
+    return jsonify({"stats": _read_stats()})
+
+
+@app.post("/admin/api/stats/reset")
+@require_auth
+def api_stats_reset():
+    default = {
+        "total_messages": 0,
+        "messages_today": {"date": time.strftime("%Y-%m-%d"), "count": 0},
+        "total_ai_calls": 0,
+        "ai_calls_today": {"date": time.strftime("%Y-%m-%d"), "count": 0},
+        "total_tokens": 0,
+        "tokens_today": {"date": time.strftime("%Y-%m-%d"), "count": 0},
+    }
+    _write_json(STATS_FILE, default)
+    return jsonify({"ok": True, "stats": default})
+
+
+# ---------------------------------------------------------------- 权限管理
+
+@app.get("/admin/api/permissions")
+@require_auth
+def api_permissions():
+    cfg = _bot_config()
+    return jsonify({
+        "root_users": cfg.get("ROOT_User", []),
+        "blacklist": cfg.get("black_list", []),
+        "allow_ai": cfg.get("Others", {}).get("allow_ai", True),
+    })
+
+
+@app.put("/admin/api/permissions")
+@require_auth
+def api_permissions_put():
+    body = request.get_json(silent=True) or {}
+    cfg = _bot_config()
+    if not CONFIG_FILE:
+        return jsonify({"error": "config_not_found", "message": "config.json 未找到"}), 400
+    if "root_users" in body:
+        cfg["ROOT_User"] = body["root_users"]
+    if "blacklist" in body:
+        cfg["black_list"] = body["blacklist"]
+    if "allow_ai" in body:
+        cfg.setdefault("Others", {})["allow_ai"] = body["allow_ai"]
+    _write_json(CONFIG_FILE, cfg)
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------- 插件开关
+
+@app.get("/admin/api/plugins/toggle")
+@require_auth
+def api_plugins_toggle():
+    enabled = _read_plugins_enabled()
+    all_plugins = _scan_plugins()
+    result = []
+    for p in all_plugins:
+        plugin_name = p["file"].replace(".py", "")
+        result.append({
+            "name": plugin_name,
+            "file": p["file"],
+            "keyword": p["keyword"],
+            "help": p["help"],
+            "enabled": enabled.get(plugin_name, True),
+        })
+    return jsonify({"plugins": result})
+
+
+@app.put("/admin/api/plugins/toggle")
+@require_auth
+def api_plugins_toggle_put():
+    body = request.get_json(silent=True) or {}
+    enabled = _read_plugins_enabled()
+    for name, state in body.items():
+        if isinstance(state, bool):
+            enabled[name] = state
+    _write_json(PLUGINS_ENABLED_FILE, enabled)
+    return jsonify({"ok": True, "plugins": enabled})
+
+
+# ---------------------------------------------------------------- AI 设置
+
+@app.get("/admin/api/ai-settings")
+@require_auth
+def api_ai_settings():
+    cfg = _bot_config()
+    others = cfg.get("Others", {})
+    return jsonify({
+        "ai_model": others.get("ai_model", "deepseek-v4-flash"),
+        "ai_base_url": others.get("ai_base_url", "https://api.deepseek.com"),
+        "ai_max_tokens": others.get("ai_max_tokens", 2000),
+        "ai_temperature": others.get("ai_temperature", 0.7),
+        "deepseek_key": _mask_value(others.get("deepseek_key", "")),
+        "gemini_key": _mask_value(others.get("gemini_key", "")),
+        "openai_key": _mask_value(others.get("openai_key", "")),
+        "enable_network": others.get("EnableNetwork", "DeepSeek"),
+    })
+
+
+@app.put("/admin/api/ai-settings")
+@require_auth
+def api_ai_settings_put():
+    body = request.get_json(silent=True) or {}
+    cfg = _bot_config()
+    if not CONFIG_FILE:
+        return jsonify({"error": "config_not_found", "message": "config.json 未找到"}), 400
+    others = cfg.setdefault("Others", {})
+    skip_mask = ("value", "key", "secret", "token", "api")
+    for k in ("ai_model", "ai_base_url", "ai_max_tokens", "ai_temperature",
+              "deepseek_key", "gemini_key", "openai_key", "EnableNetwork"):
+        if k in body and body[k] is not None and not any(t in str(body[k]) for t in skip_mask):
+            if not str(body[k]).startswith("***"):
+                others[k] = body[k]
+    _write_json(CONFIG_FILE, cfg)
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------- Prompt 管理
+
+@app.get("/admin/api/prompts")
+@require_auth
+def api_prompts():
+    return jsonify(_read_prompts())
+
+
+@app.post("/admin/api/prompts")
+@require_auth
+def api_prompts_create():
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip()
+    content = (body.get("content") or "").strip()
+    if not name or not content:
+        return jsonify({"error": "bad_request", "message": "名称和内容不能为空"}), 400
+    data = _read_prompts()
+    if name in data["prompts"]:
+        return jsonify({"error": "conflict", "message": "Prompt '" + name + "' 已存在"}), 409
+    data["prompts"][name] = {
+        "content": content,
+        "created_at": time.time(),
+        "updated_at": time.time(),
+    }
+    _write_json(PROMPTS_FILE, data)
+    return jsonify({"ok": True, "prompt": data["prompts"][name]})
+
+
+@app.put("/admin/api/prompts/<name>")
+@require_auth
+def api_prompts_update(name):
+    body = request.get_json(silent=True) or {}
+    content = (body.get("content") or "").strip()
+    if not content:
+        return jsonify({"error": "bad_request", "message": "内容不能为空"}), 400
+    data = _read_prompts()
+    if name not in data["prompts"]:
+        return jsonify({"error": "not_found", "message": "Prompt '" + name + "' 不存在"}), 404
+    data["prompts"][name]["content"] = content
+    data["prompts"][name]["updated_at"] = time.time()
+    _write_json(PROMPTS_FILE, data)
+    return jsonify({"ok": True, "prompt": data["prompts"][name]})
+
+
+@app.delete("/admin/api/prompts/<name>")
+@require_auth
+def api_prompts_delete(name):
+    data = _read_prompts()
+    if name not in data["prompts"]:
+        return jsonify({"error": "not_found", "message": "Prompt '" + name + "' 不存在"}), 404
+    del data["prompts"][name]
+    _write_json(PROMPTS_FILE, data)
+    return jsonify({"ok": True})
 
 
 @app.errorhandler(404)

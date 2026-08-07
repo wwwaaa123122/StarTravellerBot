@@ -13,7 +13,10 @@ const VIEW_TITLES = {
   users: "用户管理",
   memory: "记忆库",
   plugins: "插件管理",
+  permissions: "权限管理",
   schedule: "定时任务",
+  "ai-settings": "AI 设置",
+  prompts: "Prompt 管理",
   settings: "系统设置",
 };
 
