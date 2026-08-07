@@ -2,13 +2,14 @@
 """
 定时群发插件
 - 每天早上 06:00 (北京时间) 向配置的群聊发送早间问候
-- 管理员可手动触发群发：早生蚝 或 早生蚝 <自定义内容>
+- 管理员可手动触发群发：群发 或 群发 <自定义内容>
 """
 
-import asyncio
 import os
 import json
 from datetime import datetime, timezone, timedelta
+
+from apscheduler.triggers.cron import CronTrigger
 
 # 北京时间 (UTC+8)
 BJT = timezone(timedelta(hours=8))
@@ -44,6 +45,53 @@ async def _send_to_groups(client, content: str, notify_groups: list):
             client.logger.info(f"[scheduled_send] 已发送到群 {group_openid}: {content}")
         except Exception as e:
             client.logger.error(f"[scheduled_send] 群 {group_openid} 发送失败: {e}")
+
+
+async def _do_scheduled_send(client):
+    """执行定时群发"""
+    config = getattr(client, 'config', {}) or {}
+    cfg = config.get("scheduled_send", {})
+    default_content = cfg.get("default_content", "早生蚝")
+    notify_groups = cfg.get("notify_groups", [])
+
+    if not notify_groups:
+        return
+
+    today_str = datetime.now(BJT).strftime("%Y-%m-%d")
+    if _load_sent() == today_str:
+        return
+
+    client.logger.info(f"[scheduled_send] 执行定时群发: {default_content}")
+    await _send_to_groups(client, default_content, notify_groups)
+    _save_sent(today_str)
+
+
+def register_scheduled_jobs(scheduler):
+    """注册定时群发任务到 APScheduler"""
+    # 读取 send_time 配置（CronTrigger 需要静态 hour/minute）
+    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except Exception:
+        config = {}
+
+    cfg = config.get("scheduled_send", {})
+    send_time = cfg.get("send_time", "06:00")
+    hour, minute = map(int, send_time.split(":"))
+
+    async def wrapper():
+        client = getattr(scheduler, '_client', None)
+        if client:
+            await _do_scheduled_send(client)
+
+    scheduler.add_job(
+        wrapper,
+        CronTrigger(hour=hour, minute=minute, timezone=BJT),
+        id="scheduled_send",
+        name="定时群发",
+        replace_existing=True,
+    )
 
 
 TRIGGHT_KEYWORD = "群发"
@@ -82,39 +130,3 @@ async def on_message(event, actions, **kwargs):
         await _send_to_groups(client, content, notify_groups)
 
     return True
-
-
-async def background_tasks(client):
-    """定时群发后台任务 - 每天 06:00 发送早间问候"""
-    await asyncio.sleep(3)
-
-    config = getattr(client, 'config', {}) or {}
-    cfg = config.get("scheduled_send", {})
-    send_time = cfg.get("send_time", "06:00")
-    default_content = cfg.get("default_content", "早生蚝")
-    notify_groups = cfg.get("notify_groups", [])
-
-    if not notify_groups:
-        client.logger.warning("[scheduled_send] notify_groups 为空，定时群发不会执行")
-        return
-
-    client.logger.info(
-        f"[scheduled_send] 定时群发已启动，时间: {send_time}，内容: {default_content}"
-    )
-
-    target_hour, target_minute = map(int, send_time.split(":"))
-
-    while True:
-        now = datetime.now(BJT)
-        today_str = now.strftime("%Y-%m-%d")
-        sent_date = _load_sent()
-
-        if now.hour == target_hour and now.minute == target_minute and sent_date != today_str:
-            client.logger.info(f"[scheduled_send] 执行定时群发: {default_content}")
-            await _send_to_groups(client, default_content, notify_groups)
-            _save_sent(today_str)
-
-        await asyncio.sleep(30)
-
-
-

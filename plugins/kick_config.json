@@ -5,5 +5,8 @@
     "notify_groups": [
         "8BE49731953AD474A5E92CE753AC3D50"
     ],
+    "notify_users": [
+        "8311636DD1F88D7C4E9021CF26495EEA"
+    ],
     "check_interval": 60
 }

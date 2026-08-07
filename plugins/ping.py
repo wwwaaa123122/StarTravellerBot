@@ -7,7 +7,6 @@ import socket
 import re
 import logging
 _logger = logging.getLogger("ping")
-import logging
 
 TRIGGHT_KEYWORD = "ping "
 HELP_MESSAGE = "ping <域名或IP> -> 对目标执行ping并返回IP信息"

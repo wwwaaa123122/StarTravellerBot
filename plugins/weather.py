@@ -4,7 +4,6 @@
 import httpx
 import logging
 _logger = logging.getLogger("weather")
-import logging
 
 TRIGGHT_KEYWORD = "天气"
 HELP_MESSAGE = "天气 <城市> -> 查询天气信息"

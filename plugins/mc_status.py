@@ -2,7 +2,6 @@ import re
 import aiohttp
 import logging
 _logger = logging.getLogger("mc_status")
-import logging
 
 TRIGGHT_KEYWORD = "mc状态"
 TRIGGHT_KEYWORDS = ["mc状态", "我的世界状态", "minecraft状态", "jv状态"]

@@ -1,7 +1,6 @@
 import aiohttp
 import logging
 _logger = logging.getLogger("qr_code")
-import logging
 
 TRIGGHT_KEYWORD = "转码 "
 HELP_MESSAGE = "转码 <url/文本> -> 生成二维码图片"

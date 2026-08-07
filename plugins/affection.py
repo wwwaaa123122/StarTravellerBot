@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 """好感度查询插件 - 适配 QQ 开放平台"""
 
-import json
 import os
 import logging
+
+import aiosqlite
+
 _logger = logging.getLogger("affection")
-import logging
 
 TRIGGHT_KEYWORD = "好感度"
 HELP_MESSAGE = "好感度 -> 查询好感度信息"
 
-# 数据文件路径
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "checkin")
+# 数据库路径
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "checkin.db")
 
 # 好感度等级
 AFFECTION_LEVELS = [
@@ -26,12 +27,21 @@ AFFECTION_LEVELS = [
 ]
 
 
-def _load_data(user_id: str) -> dict:
-    """加载用户签到数据"""
-    file_path = os.path.join(DATA_DIR, f"{user_id}.json")
-    if os.path.exists(file_path):
-        with open(file_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+async def _load_data(user_id: str) -> dict:
+    """加载用户签到数据（从 SQLite）"""
+    if not os.path.exists(DB_PATH):
+        return {"points": 0, "affection": 0, "last_checkin": None, "streak": 0}
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM checkin WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if row:
+            return {
+                "points": row["points"],
+                "affection": row["affection"],
+                "last_checkin": row["last_checkin"],
+                "streak": row["streak"],
+            }
     return {"points": 0, "affection": 0, "last_checkin": None, "streak": 0}
 
 
@@ -77,7 +87,7 @@ async def on_message(event, actions, **kwargs):
     user_id = event.user_id
     
     # 加载用户数据
-    data = _load_data(user_id)
+    data = await _load_data(user_id)
     
     # 获取好感度等级和进度条
     affection_level = _get_affection_level(data["affection"])
