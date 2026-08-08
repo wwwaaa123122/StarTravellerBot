@@ -45,7 +45,6 @@ const statsGrid = computed(() => {
     { label: "消息数量", value: fmtNum(s.total_messages), sub: "今日 " + fmtNum(s.messages_today), dot: "success" },
     { label: "AI 调用", value: fmtNum(s.total_ai_calls), sub: "今日 " + fmtNum(s.ai_calls_today), dot: "success" },
     { label: "Token 消耗", value: fmtNum(s.total_tokens), sub: "今日 " + fmtNum(s.tokens_today), dot: "success" },
-    { label: "CPU 使用率", value: (c.cpu_percent || 0) + "%", sub: (c.cpu_count || "-") + " 核", dot: c.cpu_percent > 80 ? "off" : "success" },
     { label: "内存占用", value: (c.mem_percent || 0) + "%", sub: c.mem_used_gb + " / " + c.mem_total_gb + " GB", dot: c.mem_percent > 85 ? "off" : "success" },
     { label: "磁盘使用", value: (c.disk_percent || 0) + "%", sub: "系统磁盘", dot: c.disk_percent > 85 ? "off" : "success" },
   ];

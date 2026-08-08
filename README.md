@@ -14,7 +14,7 @@
 ### 1. 安装依赖
 
 ```bash
-# 安装本地包 qqbot-openapi 及其核心依赖（httpx/aiohttp/psutil）
+# 安装本地包 qqbot-openapi 及其核心依赖（httpx/aiohttp；系统状态为内置纯 Python 库，无需 psutil）
 pip install -e .
 # 安装插件额外依赖（如 python-whois）
 pip install -r requirements.txt
@@ -124,8 +124,7 @@ open-qq/
 - `qqbot-openapi`（本仓库源码，`pip install -e .` 安装）
 - `httpx` >= 0.27.0
 - `aiohttp` >= 3.9.0
-- `psutil` >= 5.9.0
-- `psutil` >= 5.9.0
+- `psutil_compat`（内置纯 Python 实现，Termux/Android 可用；非 Linux 平台可自行安装 `psutil`）
 
 ## 文档
 

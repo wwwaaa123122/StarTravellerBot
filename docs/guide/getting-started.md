@@ -24,7 +24,7 @@ cd StarTravellerBot
 ### 2. 安装依赖
 
 ```bash
-# 安装本地包 qqbot-openapi 及其核心依赖（httpx/aiohttp/psutil）
+# 安装本地包 qqbot-openapi 及其核心依赖（httpx/aiohttp；系统状态为内置纯 Python 库，无需 psutil）
 pip install -e .
 # 安装插件额外依赖（如 python-whois）
 pip install -r requirements.txt
@@ -33,7 +33,7 @@ pip install -r requirements.txt
 核心依赖：
 - `qqbot-openapi` — QQ 开放平台 SDK（本仓库源码，`pip install -e .` 安装）
 - `httpx` — HTTP 客户端
-- `psutil` — 系统状态监控
+- `psutil_compat` — 系统状态监控（内置纯 Python 实现，Termux/Android 可用，无需编译）
 
 ### 3. 配置
 

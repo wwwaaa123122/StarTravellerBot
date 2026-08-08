@@ -14,7 +14,7 @@ python open-qq/main.py
 cd open-qq && python main.py
 ```
 
-依赖：本地包 `qqbot-openapi` 及其核心依赖（`httpx`/`aiohttp`/`psutil`）由 `pyproject.toml` 声明，`pip install -e .` 安装；`requirements.txt` 仅含插件额外依赖（如 `python-whois`）。
+依赖：本地包 `qqbot-openapi` 及其核心依赖（`httpx`/`aiohttp`）由 `pyproject.toml` 声明，`pip install -e .` 安装；系统状态读取使用内置 `qqbot_openapi.psutil_compat`（纯 Python 实现的 psutil 兼容库，Termux/Android 可用、无需编译，非 Linux 平台可选装 psutil 获得完整能力）；`requirements.txt` 仅含插件额外依赖（如 `python-whois`）。
 
 ## 项目结构
 
@@ -23,7 +23,7 @@ open-qq/
 ├── main.py          # 入口，加载 .env + config.json，创建 XCLRClient
 ├── client.py        # 核心：XCLRClient(qqbot_openapi.Client)，消息分发 + AI 调用
 ├── adapters.py      # qqbot_openapi API 适配器（频道消息/权限/频道管理）
-├── qqbot_openapi/   # 轻量 SDK：鉴权管理/HTTP API/网关连接
+└── qqbot_openapi/   # 轻量 SDK：鉴权管理/HTTP API/网关连接 + psutil_compat（纯 Python 系统状态库）
 ├── plugins/         # 插件目录，动态加载
 ├── data/            # 持久化数据（签到、角色）
 └── .env             # AppID + AppSecret（必须配置）

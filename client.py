@@ -1138,18 +1138,15 @@ class XCLRClient(QQClient):
 
     def _get_status_text(self) -> str:
         try:
-            import psutil
-            cpu = psutil.cpu_percent(interval=0.1)
-            memory = psutil.virtual_memory()
+            from qqbot_openapi.psutil_compat import virtual_memory
+            memory = virtual_memory()
             memory_text = f"{memory.percent}%"
         except Exception:
-            cpu = "N/A"
             memory_text = "N/A"
 
         return f"""## 📊 {self.bot_name} 状态
 
 ### 系统信息
-- **CPU**: {cpu}%
 - **内存**: {memory_text}
 
 ### AI 配置

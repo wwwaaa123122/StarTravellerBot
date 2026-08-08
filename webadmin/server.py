@@ -3,7 +3,7 @@
 
 独立于机器人主进程运行（不修改 client.py / main.py），按需读取机器人数据：
   - 数据文件：data/checkin、data/roles、data/rag、data/scheduled_sent.json
-  - 系统状态：psutil（CPU / 内存 / 磁盘 / 进程存活检测）
+  - 系统状态：内置 psutil_compat（CPU / 内存 / 磁盘 / 进程存活检测，Termux/Android 可用）
 
 启动：
     python -m webadmin.server --host 0.0.0.0 --port 8765
@@ -29,7 +29,7 @@ import sys
 import time
 from functools import wraps
 
-import psutil
+import qqbot_openapi.psutil_compat as psutil
 from flask import Flask, Response, g, jsonify, request, send_from_directory
 
 try:
@@ -263,7 +263,6 @@ def _system_status():
     except Exception:
         proc_mem = 0
     return {
-        "cpu_percent": round(psutil.cpu_percent(interval=0.2), 1),
         "cpu_count": psutil.cpu_count(),
         "mem_percent": round(mem.percent, 1),
         "mem_used_gb": round(mem.used / 1024 ** 3, 2),
