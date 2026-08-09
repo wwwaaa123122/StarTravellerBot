@@ -1,43 +1,34 @@
 # -*- coding: utf-8 -*-
 """
-QQ 开放平台机器人客户端
-实现 main.py 的主要功能，适配 QQ 开放平台 API
-
-事件类型:
-- C2C_MESSAGE_CREATE: 单聊消息
-- GROUP_AT_MESSAGE_CREATE: 群聊@机器人消息
-- GROUP_MESSAGE_CREATE: 群聊消息(非@,与 AT 格式相同)
-- DIRECT_MESSAGE_CREATE: 频道私信消息
-- AT_MESSAGE_CREATE: 频道@机器人消息
-- MESSAGE_CREATE: 频道全量消息(私域)
+QQ 开放平台机器人客户端：消息分发 + AI 调用 + 插件调度。
+场景流程见 core/dispatcher.py，插件系统见 core/plugin_manager.py。
 """
 
 import os
-import re
 import sys
-import time
-import json
 import asyncio
 import traceback
-import inspect
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
-import httpx
 from qqbot_openapi import logging
 from qqbot_openapi import Message, DirectMessage
 from qqbot_openapi import Client as QQClient, Intents
 
 CONTACT_URL = "https://xc-lr.cn/about"
 
-
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
 from Tools.core import BotContext, VERSION_NAME
 from Tools.rag_memory import RAGMemory
-from Tools.scheduler import get_scheduler, shutdown as shutdown_scheduler
+from Tools.scheduler import get_scheduler, set_client, shutdown as shutdown_scheduler
 from ai.role_manager import RoleManager
 from ai.chat import AIChat
+from core.http import create_http_client
+from core.plugin_manager import PluginManager
+from core.messenger import Messenger
+from core.stats import StatsTracker
+from core.dispatcher import Dispatcher, SCENE_C2C, SCENE_GROUP_AT, SCENE_GROUP, SCENE_DIRECT, SCENE_AT
 
 
 class XCLRClient(QQClient):
@@ -52,12 +43,7 @@ class XCLRClient(QQClient):
     """
 
     def __init__(self, config: Dict[str, Any], **kwargs):
-        """
-        初始化机器人客户端
-
-        Args:
-            config: 配置字典
-        """
+        """初始化机器人客户端。"""
         intents = Intents(
             public_guild_messages=True,  # 频道公域消息 (AT_MESSAGE_CREATE)
             public_messages=True,        # 群/C2C公域消息 (GROUP_AT_MESSAGE_CREATE, C2C_MESSAGE_CREATE)
@@ -80,17 +66,16 @@ class XCLRClient(QQClient):
 
         self.allow_ai = others.get("allow_ai", True)
 
-        self._plugins = []
-        self._plugins_help = {}
-        self._scheduler = None
-
         self.rag = RAGMemory(os.path.join(PROJECT_ROOT, "data"))
-
-        self._stats_file = os.path.join(PROJECT_ROOT, "data", "stats.json")
 
         self.logger = logging.get_logger()
 
         self.role_manager = RoleManager()
+
+        self.stats = StatsTracker(logger=self.logger)
+        self.messenger = Messenger(self)
+        self.plugin_manager = PluginManager(self)
+        self.dispatcher = Dispatcher(self)
 
         self.ai_chat = AIChat(
             config=config,
@@ -104,9 +89,9 @@ class XCLRClient(QQClient):
         )
 
     @property
-    def http_client(self) -> httpx.AsyncClient:
+    def http_client(self):
         if not hasattr(self, '_http_client_instance') or self._http_client_instance.is_closed:
-            self._http_client_instance = httpx.AsyncClient(timeout=60.0)
+            self._http_client_instance = create_http_client()
         return self._http_client_instance
 
     async def close(self):
@@ -123,458 +108,36 @@ class XCLRClient(QQClient):
         self.logger.info(f"AI 对话: {'开启' if self.allow_ai else '关闭'}")
         self.logger.info(f"{'='*50}")
 
-        self._load_plugins()
+        self.plugin_manager.load_plugins()
         await self._start_scheduler()
 
-    @staticmethod
-    def _is_plugin_file(filename: str) -> bool:
-        return filename.endswith(".py") and not filename.startswith(("__", "d_"))
-
-    def _load_plugin_module(self, plugin_dir: str, filename: str):
-        import importlib.util
-
-        plugin_name = filename[:-3]
-        plugin_path = os.path.join(plugin_dir, filename)
-        spec = importlib.util.spec_from_file_location(f"plugins.{plugin_name}", plugin_path)
-        if not spec or not spec.loader:
-            raise ImportError(f"无法创建插件加载规范: {filename}")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return plugin_name, module
-
-    def _register_plugin(self, plugin_name: str, module) -> bool:
-        help_msg = getattr(module, 'HELP_MESSAGE', '')
-        on_message = getattr(module, 'on_message', None)
-        if not callable(on_message):
-            return False
-
-        # 优先使用 TRIGGHT_KEYWORDS（多关键字），否则回退 TRIGGHT_KEYWORD
-        keywords = getattr(module, 'TRIGGHT_KEYWORDS', None)
-        if keywords:
-            keywords = [str(k).strip() for k in keywords if str(k).strip()]
-        else:
-            keyword = getattr(module, 'TRIGGHT_KEYWORD', None)
-            keywords = [keyword.strip()] if keyword and keyword.strip() else []
-        if not keywords:
-            return False
-
-        keyword = keywords[0]
-        self._plugins.append({
-            'name': plugin_name,
-            'keyword': keyword,
-            'keywords': keywords,
-            'help': help_msg,
-            'module': module,
-            'on_message': on_message,
-            'is_any': 'Any' in keywords,
-        })
-        self._plugins_help[plugin_name] = help_msg
-        self.logger.info(f"加载插件: {plugin_name} ({'/'.join(keywords)})")
-        return True
-
-    def _register_plugin_scheduled_jobs(self, plugin_name: str, module) -> bool:
-        """注册插件定时任务（通过 APScheduler）"""
-        register_fn = getattr(module, 'register_scheduled_jobs', None)
-        if callable(register_fn):
-            scheduler = get_scheduler()
-            register_fn(scheduler)
-            self.logger.info(f"插件 {plugin_name} 注册定时任务")
-            return True
-        return False
-
-    def _load_plugins(self):
-        plugin_dir = os.path.join(PROJECT_ROOT, "plugins")
-        self._plugins.clear()
-        self._plugins_help.clear()
-
-        if not os.path.exists(plugin_dir):
-            self.logger.warning(f"插件目录不存在: {plugin_dir}")
-            return
-
-        for filename in sorted(os.listdir(plugin_dir)):
-            if not self._is_plugin_file(filename):
-                continue
-
-            plugin_name = filename[:-3]
-            try:
-                plugin_name, module = self._load_plugin_module(plugin_dir, filename)
-                registered = self._register_plugin(plugin_name, module)
-                has_scheduled = self._register_plugin_scheduled_jobs(plugin_name, module)
-                if not registered and not has_scheduled:
-                    self.logger.warning(f"插件 {plugin_name} 缺少 TRIGGHT_KEYWORD/on_message 且无 register_scheduled_jobs，已跳过")
-            except Exception as e:
-                self.logger.error(f"加载插件 {plugin_name} 失败: {e}")
-                self.logger.error(traceback.format_exc())
-
-        self._plugins.sort(key=lambda p: (p['is_any'], -max(len(k) for k in p['keywords']), p['name']))
-        self.logger.info(f"插件加载完成: {len(self._plugins)} 个命令插件")
-
     async def _start_scheduler(self):
-        """启动 APScheduler 调度器，注入客户端引用"""
+        """启动 APScheduler 调度器，注入客户端引用。"""
         scheduler = get_scheduler()
-        scheduler._client = self
+        set_client(self)
         scheduler.start()
-        job_count = len(scheduler.get_jobs())
-        self.logger.info(f"调度器已启动，共 {job_count} 个定时任务")
-
-    async def _try_plugins(self, message: Any, order: str, skip_plugins: Optional[set] = None) -> bool:
-        """
-        尝试匹配并执行插件
-
-        Args:
-            message: 消息对象
-            order: 用户命令
-            skip_plugins: 需要跳过的插件名称集合 (None 表示不跳过)
-
-        Returns:
-            bool: 是否有插件处理了消息
-        """
-        skip_plugins = skip_plugins or set()
-        order = order.strip()
-        if not order:
-            return False
-
-        for plugin in self._plugins:
-            if plugin['name'] in skip_plugins:
-                continue
-            if not plugin['is_any'] and not any(order.startswith(kw) for kw in plugin['keywords']):
-                continue
-
-            log_action = "尝试" if plugin['is_any'] else "匹配到"
-            self.logger.info(f"[插件] {log_action}插件: {plugin['name']}, 关键字: {'/'.join(plugin['keywords'])}")
-            result = await self._execute_plugin(plugin, message, order)
-            if result:
-                return True
-
-        return False
-
-    def _create_plugin_compat_objects(self):
-        class FakeManager:
-            class Message:
-                def __init__(self, *args):
-                    self.parts = args
-                def __iter__(self):
-                    return iter(self.parts)
-
-        class FakeSegments:
-            class Text:
-                def __init__(self, text):
-                    self.text = str(text)
-                def __str__(self):
-                    return self.text
-
-            class At:
-                def __init__(self, user_id):
-                    self.user_id = user_id
-                def __str__(self):
-                    return f"@{self.user_id}"
-
-            class Image:
-                def __init__(self, url):
-                    self.url = url
-                    self.file = url
-
-            class Reply:
-                def __init__(self, msg_id):
-                    self.id = msg_id
-
-        class FakeEvents:
-            class GroupMessageEvent: pass
-            class PrivateMessageEvent: pass
-
-        return FakeManager, FakeSegments, FakeEvents
-
-    def _build_plugin_kwargs(self, plugin: dict, message: Any, order: str) -> dict:
-        adapted_event = self._adapt_message_for_plugin(message, order)
-        actions = self._create_plugin_actions(message)
-        manager, segments, events = self._create_plugin_compat_objects()
-        cooldowns = {}
-
-        available = {
-            'event': adapted_event,
-            'actions': actions,
-            'Manager': manager,
-            'Segments': segments,
-            'Events': events,
-            'reminder': self.reminder,
-            'bot_name': self.bot_name,
-            'order': order,
-            'ROOT_User': self.root_users,
-            'Super_User': [],
-            'Manage_User': [],
-            'config': self.config,
-            'time': time,
-            'cooldowns': cooldowns,
-            'plugins': self._plugins,
-            'plugin_categories': self.PLUGIN_CATEGORIES,
-            'client': self,
-        }
-
-        sig = inspect.signature(plugin['on_message'])
-        kwargs = {name: available[name] for name in sig.parameters if name in available}
-        has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
-        if has_var_kwargs:
-            kwargs.update({key: value for key, value in available.items() if key not in kwargs})
-        return kwargs
-
-    async def _execute_plugin(self, plugin: dict, message: Any, order: str) -> bool:
-        try:
-            result = await plugin['on_message'](**self._build_plugin_kwargs(plugin, message, order))
-            if result:
-                self.logger.info(f"[插件] {plugin['name']} 处理了消息")
-                return True
-            return False
-        except Exception as e:
-            self.logger.error(f"执行插件 {plugin['name']} 错误: {e}")
-            self.logger.error(traceback.format_exc())
-            return False
-
-    def _adapt_message_for_plugin(self, message: Any, content: str):
-        nickname = self._try_get_nickname(message)
-        class AdaptedEvent:
-            def __init__(self, msg, text):
-                self.message = text
-                self.user_id = getattr(msg.author, 'member_openid', 'unknown')
-                self.nickname = nickname
-                self.group_id = getattr(msg, 'group_openid', None)
-                self.message_id = getattr(msg, 'id', None)
-                self.self_id = None
-        return AdaptedEvent(message, content)
-
-    def _create_plugin_actions(self, message: Any):
-        client = self
-
-        class PluginActions:
-            def __init__(self):
-                self._message = message
-                self._client = client
-
-            async def send(self, **kwargs):
-                markdown = kwargs.get('markdown')
-                if markdown:
-                    await client._send_message(message, markdown=markdown)
-                    return
-                msg = kwargs.get('content') or kwargs.get('message')
-                if msg:
-                    content = self._extract_text(msg)
-                    if content:
-                        await client._send_message(message, content)
-
-            async def send_file(self, url: str = None, file_type: int = 1,
-                                file=None, filename: str = None):
-                """发送文件（网络URL 或 BytesIO 本地文件）
-
-                用法:
-                    actions.send_file(url="https://...")       # 网络文件（先下载再 base64 发送）
-                    actions.send_file(file=buf, filename="x.png")  # 本地 BytesIO
-                """
-                import base64
-                try:
-                    if file is not None and hasattr(file, 'read'):
-                        data = file.read()
-                    elif url:
-                        import httpx
-                        async with httpx.AsyncClient() as client:
-                            resp = await client.get(url, timeout=30)
-                            resp.raise_for_status()
-                            data = resp.content
-                    else:
-                        raise ValueError("必须提供 url 或 file 参数")
-
-                    file_b64 = base64.b64encode(data).decode("utf-8")
-                    from qqbot_openapi import Route
-                    group_openid = getattr(self._message, 'group_openid', None)
-                    payload = {
-                        "file_type": file_type,
-                        "file_data": file_b64,
-                        "srv_send_msg": True,
-                    }
-                    if group_openid:
-                        route = Route("POST", "/v2/groups/{group_openid}/files",
-                                     group_openid=group_openid)
-                    else:
-                        route = Route("POST", "/v2/users/{openid}/files",
-                                     openid=self._message.author.user_openid)
-                    await self._client.api._http.request(route, json=payload)
-                    self._client.logger.info(f"文件发送成功: {filename or url or '(bytesio)'}")
-                except Exception as e:
-                    self._client.logger.error(f"发送文件失败: {e}")
-            async def send_local_file(self, file_path: str, file_type: int = 1):
-                """发送本地文件（base64 编码直接上传）"""
-                import base64
-                try:
-                    with open(file_path, "rb") as f:
-                        file_b64 = base64.b64encode(f.read()).decode("utf-8")
-                    from qqbot_openapi import Route
-                    group_openid = getattr(self._message, 'group_openid', None)
-                    payload = {
-                        "file_type": file_type,
-                        "file_data": file_b64,
-                        "srv_send_msg": True,
-                    }
-                    if group_openid:
-                        route = Route("POST", "/v2/groups/{group_openid}/files", group_openid=group_openid)
-                    else:
-                        route = Route("POST", "/v2/users/{openid}/files", openid=self._message.author.user_openid)
-                    await self._client.api._http.request(route, json=payload)
-                    self._client.logger.info(f"本地文件发送成功: {os.path.basename(file_path)}")
-                except Exception as e:
-                    self._client.logger.error(f"发送本地文件失败: {e}")
-
-            async def send_help_image(self, help_text: str):
-                sent = await client._send_help_image(self._message, help_text)
-                if not sent:
-                    await self.send(content=help_text)
-
-            def _extract_text(self, msg):
-                if isinstance(msg, str):
-                    return msg
-                if hasattr(msg, '__iter__'):
-                    parts = []
-                    for part in msg:
-                        if hasattr(part, 'text'):
-                            parts.append(part.text)
-                        elif isinstance(part, str):
-                            parts.append(part)
-                    return ''.join(parts)
-                return str(msg) if msg else ''
-
-            async def get_group_member_info(self, group_id, user_id):
-                class MemberInfo:
-                    def __init__(self):
-                        self.data = type('data', (), {'raw': {'card': '', 'nickname': '用户', 'user_id': user_id}})()
-                return MemberInfo()
-
-            async def get_stranger_info(self, user_id):
-                class StrangerInfo:
-                    def __init__(self):
-                        self.data = type('data', (), {'raw': {'nickname': '用户', 'user_id': user_id}})()
-                return StrangerInfo()
-
-            async def get_msg(self, msg_id):
-                class FakeMsg:
-                    data = {'message': []}
-                return FakeMsg()
-
-            async def del_message(self, msg_id):
-                pass
-
-            async def set_msg_emoji_like(self, **kwargs):
-                return {'status': 'ok'}
-
-            @property
-            def custom(self):
-                class Custom:
-                    async def set_msg_emoji_like(self, **kwargs):
-                        return {'status': 'ok'}
-                return Custom()
-
-        return PluginActions()
+        self.logger.info(f"调度器已启动，共 {len(scheduler.get_jobs())} 个定时任务")
 
     async def _send_message(self, message, content=None, msg_type=0, markdown=None):
-        """
-        发送消息，自动识别消息类型（单聊/群聊）
-
-        Args:
-            message: 原消息对象
-            content: 消息内容
-            msg_type: 消息类型 (0=文本, 2=markdown, 3=ark, 4=embed)
-            markdown: Markdown 内容字典 (如 {"content": "markdown文本"})
-        """
-        group_openid = getattr(message, 'group_openid', None)
-        try:
-            if group_openid:
-                kwargs = {
-                    "group_openid": group_openid,
-                    "msg_id": message.id,
-                    "msg_seq": str(int(time.time() * 1000000) % 100000000),
-                }
-                api_method = self.api.post_group_message
-                display_prefix = f"群 {group_openid}"
-            else:
-                kwargs = {
-                    "openid": message.author.user_openid,
-                    "msg_id": message.id,
-                }
-                api_method = self.api.post_c2c_message
-                display_prefix = f"单聊 {message.author.user_openid}"
-
-            if markdown:
-                kwargs["msg_type"] = 2
-                kwargs["markdown"] = markdown
-                display_text = markdown.get("content", "")[:100]
-            elif content and self._has_markdown_syntax(content):
-                kwargs["msg_type"] = 2
-                kwargs["markdown"] = {"content": content}
-                display_text = content[:100]
-            else:
-                kwargs["msg_type"] = msg_type
-                kwargs["content"] = content or ""
-                display_text = (content or "")[:100]
-
-            self.logger.info(f"[发送消息] {display_prefix}: {display_text}...")
-            await api_method(**kwargs)
-        except Exception as e:
-            self.logger.error(f"发送消息失败: {e}")
+        await self.messenger.send_message(message, content, msg_type, markdown)
 
     async def _send_help_image(self, message, help_text: str) -> bool:
-        try:
-            await self._send_message(message, help_text)
-            return True
-        except Exception as e:
-            self.logger.error(f"发送帮助消息失败: {e}")
-            return False
+        return await self.messenger.send_help_image(message, help_text)
 
     async def _reply(self, message, content=None, markdown=None):
-        """统一的回复接口，自动适配消息类型"""
-        if hasattr(message, 'reply'):
-            kwargs = {"content": content}
-            if markdown:
-                kwargs["markdown"] = markdown
-            await message.reply(**kwargs)
-        else:
-            await self._send_message(message, content, markdown=markdown)
+        await self.messenger.reply(message, content, markdown)
+
+    def _strip_mention(self, content: str) -> str:
+        return self.messenger.strip_mention(content)
 
     async def _handle_ping(self, message):
         await self._reply(message, content="Ciallo∼(∠・ω[ )⌒☆")
 
     async def _handle_help_command(self, message):
-        help_text = self._get_help_text()
+        help_text = self.plugin_manager.get_help_text(self.bot_name, self.version_name)
         sent = await self._send_help_image(message, help_text)
         if not sent:
             await self._reply(message, content=help_text)
-
-    async def _handle_roleplay_command(self, message, content) -> bool:
-        """处理角色扮演命令（集成到主程序而非插件系统）"""
-        if not content.startswith("角色"):
-            return False
-
-        adapted_event = self._adapt_message_for_plugin(message, content)
-        actions = self._create_plugin_actions(message)
-        manager, segments, events = self._create_plugin_compat_objects()
-
-        kwargs = {
-            'event': adapted_event,
-            'actions': actions,
-            'Manager': manager,
-            'Segments': segments,
-            'Events': events,
-            'reminder': self.reminder,
-            'bot_name': self.bot_name,
-            'order': content,
-            'ROOT_User': self.root_users,
-            'Super_User': [],
-            'Manage_User': [],
-            'config': self.config,
-            'time': time,
-            'cooldowns': {},
-            'plugins': self._plugins,
-            'plugin_categories': self.PLUGIN_CATEGORIES,
-            'client': self,
-        }
-
-        from ai.roleplay import on_message as roleplay_on_message
-        return await roleplay_on_message(adapted_event, actions, **kwargs)
 
     async def _handle_status_command(self, message):
         status = self._get_status_text()
@@ -582,6 +145,16 @@ class XCLRClient(QQClient):
             await message.reply(markdown={"content": status})
         else:
             await self._send_message(message, status)
+
+    async def _handle_roleplay_command(self, message, content) -> bool:
+        """处理角色扮演命令（集成到主程序而非插件系统）"""
+        if not content.startswith("角色"):
+            return False
+
+        from ai.roleplay import on_message as roleplay_on_message
+        kwargs = self.plugin_manager.build_kwargs({'on_message': roleplay_on_message}, message, content)
+        # kwargs 已含 event/actions，直接展开避免重复传参
+        return await roleplay_on_message(**kwargs)
 
     async def _handle_ai_chat(self, message, order, user_id, user_name, use_markdown=False):
         """统一的 AI 对话处理（支持 Function Calling）"""
@@ -594,7 +167,7 @@ class XCLRClient(QQClient):
                 user_id, user_name, order, execute_tool, self.root_users)
             if result:
                 usage = self.ai_chat._last_usage or {}
-                self._record_ai_call(usage.get("total_tokens", 0))
+                self.stats.record_ai_call(usage.get("total_tokens", 0))
                 if use_markdown:
                     await message.reply(markdown={"content": result})
                 else:
@@ -619,7 +192,7 @@ class XCLRClient(QQClient):
 
             audio_path = await _generate_tts(clean, self.config)
             if audio_path:
-                actions = self._create_plugin_actions(message)
+                actions = self.plugin_manager.create_plugin_actions(message)
                 await actions.send_local_file(audio_path, file_type=3)
                 await asyncio.sleep(1)
                 if os.path.exists(audio_path):
@@ -632,67 +205,9 @@ class XCLRClient(QQClient):
             self.logger.error(f"AI 语音生成失败: {e}")
 
     async def on_c2c_message_create(self, message: Any):
-        """
-        处理 QQ 单聊消息 (C2C_MESSAGE_CREATE)
-        """
+        """处理 QQ 单聊消息 (C2C_MESSAGE_CREATE)"""
         self.logger.info(f"[EVENT] on_c2c_message_create triggered")
-        try:
-            content = message.content.strip() if message.content else ""
-            user_openid = message.author.user_openid
-
-            nickname = self._try_get_nickname(message)
-            self._record_nickname(user_openid, nickname)
-            user_label = f"{nickname}({user_openid})" if nickname else user_openid
-            self.logger.info(f"[单聊] 用户 {user_label}: {content}")
-
-            self._record_message()
-
-            if not content:
-                await self._send_message(message, f"你好呀~ 我是{self.bot_name}，有什么可以帮你的吗？")
-                return
-
-            if content.lower() == "ping":
-                await self._handle_ping(message)
-                return
-
-            if content in ("帮助", f"{self.reminder}帮助"):
-                await self._handle_help_command(message)
-                return
-
-            if content in ("状态", f"{self.reminder}状态"):
-                await self._handle_status_command(message)
-                return
-
-            if content in ("注销", f"{self.reminder}注销"):
-                self.context.user_lists.pop(user_openid, None)
-                await self._send_message(message, "已清除你的对话上下文记忆")
-                self.logger.info(f"[单聊] 用户 {user_label} 已清除上下文")
-                return
-
-            if await self._handle_roleplay_command(message, content):
-                return
-
-            if not self.allow_ai:
-                await self._send_message(message, f"未找到相关指令")
-                return
-
-            if content.startswith(self.reminder):
-                order = content[len(self.reminder):].strip()
-                if len(order) >= 2:
-                    await self._handle_ai_chat(message, order, user_openid, "用户")
-                    return
-
-            if len(content) >= 1:
-                await self._handle_ai_chat(message, content, user_openid, "用户")
-
-        except Exception as e:
-            self.logger.error(f"处理单聊消息错误: {traceback.format_exc()}")
-            try:
-                await self._send_message(message, f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
-            except Exception:
-                pass
-
-
+        await self.dispatcher.route(message, SCENE_C2C)
 
     def _try_get_nickname(self, message) -> str:
         """从事件 author 提取昵称。
@@ -715,341 +230,24 @@ class XCLRClient(QQClient):
                 return str(value)
         return ""
 
-    def _record_nickname(self, user_id: str, nickname: str) -> None:
-        """记录用户昵称：写入全局对照表 data/nickname_map.json。
-
-        任何消息事件都会调用（不要求签到），供 webadmin 显示昵称使用；
-        若该用户已有签到记录，同时回填签到数据文件。
-        重复写相同值直接跳过。
-        """
-        if not user_id or not nickname:
-            return
-        self._save_nickname_map(user_id, nickname)
-
-        # 兼容：已有签到记录的用户回填签到数据库
-        db_path = os.path.join(PROJECT_ROOT, "data", "checkin.db")
-        if not os.path.exists(db_path):
-            return
-        try:
-            import sqlite3
-            conn = sqlite3.connect(db_path)
-            conn.execute(
-                "UPDATE checkin SET nickname = ? WHERE user_id = ? AND (nickname IS NULL OR nickname = '')",
-                (nickname, user_id),
-            )
-            conn.commit()
-            conn.close()
-            self.logger.info(f"[昵称] {user_id} -> {nickname}")
-        except Exception:
-            pass
-
-    def _load_stats(self) -> dict:
-        """加载统计数据"""
-        today = time.strftime("%Y-%m-%d")
-        default = {
-            "total_messages": 0,
-            "messages_today": {"date": today, "count": 0},
-            "total_ai_calls": 0,
-            "ai_calls_today": {"date": today, "count": 0},
-            "total_tokens": 0,
-            "tokens_today": {"date": today, "count": 0},
-        }
-        try:
-            if os.path.exists(self._stats_file):
-                with open(self._stats_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for key in ("messages_today", "ai_calls_today", "tokens_today"):
-                    if data.get(key, {}).get("date") != today:
-                        data[key] = {"date": today, "count": 0}
-                return data
-        except (OSError, json.JSONDecodeError):
-            pass
-        return default
-
-    def _save_stats(self, data: dict):
-        """原子写入统计数据"""
-        try:
-            os.makedirs(os.path.dirname(self._stats_file), exist_ok=True)
-            tmp = self._stats_file + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, self._stats_file)
-        except OSError:
-            pass
-
-    def _record_message(self):
-        """记录一条消息（由消息处理器调用）"""
-        try:
-            stats = self._load_stats()
-            stats["total_messages"] += 1
-            stats["messages_today"]["count"] += 1
-            self._save_stats(stats)
-        except Exception:
-            pass
-
-    def _record_ai_call(self, token_count: int = 0):
-        """记录一次 AI 调用及 token 消耗"""
-        try:
-            stats = self._load_stats()
-            stats["total_ai_calls"] += 1
-            stats["ai_calls_today"]["count"] += 1
-            if token_count > 0:
-                stats["total_tokens"] += token_count
-                stats["tokens_today"]["count"] += token_count
-            self._save_stats(stats)
-        except Exception:
-            pass
-
-    def _save_nickname_map(self, user_id: str, nickname: str) -> None:
-        """把 openid -> 昵称 写入全局对照表 data/nickname_map.json（原子写入）。"""
-        if not user_id or not nickname:
-            return
-        path = os.path.join(PROJECT_ROOT, "data", "nickname_map.json")
-        try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            if os.path.exists(path):
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            else:
-                data = {}
-            if not isinstance(data, dict):
-                data = {}
-            if data.get(user_id) == nickname:
-                return
-            data[user_id] = nickname
-            tmp = path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, path)
-        except (OSError, json.JSONDecodeError):
-            pass
-
-    def _strip_mention(self, content: str) -> str:
-        if content.startswith(f"<@!{self.robot.id}>"):
-            return content[len(f"<@!{self.robot.id}>"):].strip()
-        elif content.startswith(f"<@{self.robot.id}>"):
-            return content[len(f"<@{self.robot.id}>"):].strip()
-        return content
-
     async def on_group_at_message_create(self, message: Any):
-        """
-        处理 QQ 群聊@机器人消息 (GROUP_AT_MESSAGE_CREATE)
-        """
+        """处理 QQ 群聊@机器人消息 (GROUP_AT_MESSAGE_CREATE)"""
         self.logger.info(f"[EVENT] on_group_at_message_create triggered")
-        try:
-            content = message.content.strip() if message.content else ""
-            member_openid = message.author.member_openid
-            group_openid = message.group_openid
-
-            content = self._strip_mention(content)
-
-            nickname = self._try_get_nickname(message)
-            self._record_nickname(member_openid, nickname)
-            user_label = f"{nickname}({member_openid})" if nickname else member_openid
-            self.logger.info(f"[群聊] 群 {group_openid} 用户 {user_label}: {content}")
-
-            self._record_message()
-
-            if not content:
-                await self._send_message(message, f"发送 @机器人 /帮助 查看可用指令")
-                return
-
-            order = content
-            if order.startswith("+") or order.startswith("/"):
-                order = order[1:].strip()
-
-            if order.lower() == "ping":
-                await self._handle_ping(message)
-                return
-
-            if order == "帮助":
-                await self._handle_help_command(message)
-                return
-
-            if order == "状态":
-                await self._handle_status_command(message)
-                return
-
-            if await self._handle_roleplay_command(message, order):
-                return
-
-            plugin_result = await self._try_plugins(message, order)
-            if plugin_result:
-                return
-
-            if content and not content.startswith(self.reminder):
-                await self._send_message(message, f"未找到匹配的插件命令，发送 @机器人 /帮助 查看可用指令")
-
-        except Exception as e:
-            self.logger.error(f"处理群聊消息错误: {traceback.format_exc()}")
-            try:
-                await self._send_message(message, f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
-            except Exception:
-                pass
+        await self.dispatcher.route(message, SCENE_GROUP_AT)
 
     async def on_group_message_create(self, message: Any):
-        """
-        处理群聊全量消息 (GROUP_MESSAGE_CREATE)
-        """
+        """处理群聊全量消息 (GROUP_MESSAGE_CREATE)"""
         self.logger.info(f"[EVENT] on_group_message_create triggered")
-        try:
-            content = message.content.strip() if message.content else ""
-            member_openid = message.author.member_openid
-            group_openid = message.group_openid
-
-            nickname = self._try_get_nickname(message)
-            self._record_nickname(member_openid, nickname)
-            user_label = f"{nickname}({member_openid})" if nickname else member_openid
-            self.logger.info(f"[群聊全量] 群 {group_openid} 用户 {user_label}: {content}")
-
-            self._record_message()
-
-            if not content:
-                return
-
-            raw_content = content
-            content = re.sub(r'<@!?\w+>', '', content).strip()
-            if not content:
-                return
-
-            order = content
-            if order.startswith("+") or order.startswith("/"):
-                order = order[1:].strip()
-
-            if order.lower() == "ping":
-                await self._handle_ping(message)
-                return
-
-            if order == "帮助":
-                await self._handle_help_command(message)
-                return
-
-            if order == "状态":
-                await self._handle_status_command(message)
-                return
-
-            if await self._handle_roleplay_command(message, order):
-                return
-
-            plugin_result = await self._try_plugins(message, order, skip_plugins={"affection"})
-            if plugin_result:
-                return
-
-            if raw_content.startswith(self.reminder):
-                await self._send_message(message, f"未找到匹配的插件命令，发送 @机器人 /帮助 查看可用指令")
-
-        except Exception as e:
-            self.logger.error(f"处理群聊全量消息错误: {traceback.format_exc()}")
-            try:
-                await self._send_message(message, f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
-            except Exception:
-                pass
+        await self.dispatcher.route(message, SCENE_GROUP)
 
     async def on_direct_message_create(self, message: DirectMessage):
-        """
-        处理频道私信消息 (DIRECT_MESSAGE_CREATE)
-        """
-        try:
-            content = message.content.strip() if message.content else ""
-            user_id = message.author.id
-
-            nickname = self._try_get_nickname(message)
-            user_label = f"{nickname}({user_id})" if nickname else user_id
-            self.logger.info(f"[频道私信] 用户 {user_label}: {content}")
-
-            self._record_message()
-
-            if not content:
-                await message.reply(content=f"你好呀~ 我是{self.bot_name}，有什么可以帮你的吗？")
-                return
-
-            if content.lower() == "ping":
-                await self._handle_ping(message)
-                return
-
-            if content in ("帮助", f"{self.reminder}帮助"):
-                await self._handle_help_command(message)
-                return
-
-            if await self._handle_roleplay_command(message, content):
-                return
-
-            if not self.allow_ai:
-                await message.reply(content=f"未找到相关指令")
-                return
-
-            if content.startswith(self.reminder):
-                order = content[len(self.reminder):].strip()
-                if len(order) >= 2:
-                    await self._handle_ai_chat(message, order, user_id, message.author.username, use_markdown=True)
-                    return
-
-            if len(content) >= 2:
-                await self._handle_ai_chat(message, content, user_id, message.author.username, use_markdown=True)
-
-        except Exception as e:
-            self.logger.error(f"处理频道私信错误: {traceback.format_exc()}")
-            try:
-                await message.reply(content=f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
-            except Exception:
-                pass
+        """处理频道私信消息 (DIRECT_MESSAGE_CREATE)"""
+        await self.dispatcher.route(message, SCENE_DIRECT)
 
     async def on_at_message_create(self, message: Message):
-        """
-        处理频道@机器人消息 (AT_MESSAGE_CREATE)
-        """
-        try:
-            content = message.content.strip() if message.content else ""
-            user_id = message.author.id
-
-            content = self._strip_mention(content)
-
-            nickname = self._try_get_nickname(message)
-            user_label = f"{nickname}({user_id})" if nickname else user_id
-            self.logger.info(f"[频道] 频道 {message.channel_id} 用户 {user_label}: {content}")
-
-            self._record_message()
-
-            if not content:
-                help_text = self._get_help_text()
-                sent = await self._send_help_image(message, help_text)
-                if not sent:
-                    await message.reply(content=help_text)
-                return
-
-            if content.lower() == "ping":
-                await self._handle_ping(message)
-                return
-
-            if content in ("帮助", f"{self.reminder}帮助"):
-                await self._handle_help_command(message)
-                return
-
-            if content in ("状态", f"{self.reminder}状态"):
-                await self._handle_status_command(message)
-                return
-
-            if await self._handle_roleplay_command(message, content):
-                return
-
-            if not self.allow_ai:
-                await message.reply(content=f"未找到相关指令")
-                return
-
-            if content.startswith(self.reminder):
-                order = content[len(self.reminder):].strip()
-                if len(order) >= 2:
-                    await self._handle_ai_chat(message, order, user_id, message.author.username, use_markdown=True)
-                    return
-
-        except Exception as e:
-            self.logger.error(f"处理频道消息错误: {traceback.format_exc()}")
-            try:
-                await message.reply(content=f"{self.bot_name} 发生错误了，请稍后再试\n\n错误信息: {e}\n联系管理员: {CONTACT_URL}")
-            except Exception:
-                pass
-
-
+        """处理频道@机器人消息 (AT_MESSAGE_CREATE)"""
+        self.logger.info(f"[EVENT] on_at_message_create triggered")
+        await self.dispatcher.route(message, SCENE_AT)
 
     async def on_group_add_robot(self, group: Any):
         self.logger.info(f"机器人被添加到群: {getattr(group, 'group_openid', None) or 'unknown'}")
@@ -1068,73 +266,6 @@ class XCLRClient(QQClient):
 
     async def on_friend_del(self, user: Any):
         self.logger.info(f"好友删除: {getattr(user, 'user_openid', None) or 'unknown'}")
-
-    @staticmethod
-    def _has_markdown_syntax(text: str) -> bool:
-        if not text:
-            return False
-        lines = text.split('\n')
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith(('# ', '## ', '### ', '#### ', '##### ', '###### ')):
-                return True
-            if stripped.startswith('- ') or stripped.startswith('* '):
-                return True
-            if stripped.startswith(('1. ', '2. ', '3. ')):
-                return True
-            if stripped.startswith('> '):
-                return True
-            if stripped.startswith('```'):
-                return True
-            if stripped in ('---', '***', '___'):
-                return True
-        if '**' in text or '__' in text or '*' in text:
-            return True
-        if '`' in text:
-            return True
-        if '[[' in text and ']]' in text:
-            return True
-        if '[' in text and '](' in text:
-            return True
-        return False
-
-    PLUGIN_CATEGORIES = [
-        ("🎯 签到系统", ["checkin", "affection"]),
-        ("🌤️ 生活工具", ["weather", "ping", "hitokoto", "domain_whois", "httptest"]),
-        ("🎨 娱乐工具", ["acg_picture", "qr_code", "mc_status"]),
-        ("📺 直播监控", ["kick"]),
-    ]
-
-    def _get_help_text(self) -> str:
-        lines = [f"## 📖 {self.bot_name} 帮助", ""]
-        lines.append("### 💡 群聊指令格式")
-        lines.append("- **@机器人 /指令** - 执行指令")
-        lines.append("")
-        lines.append("### 🎮 内置指令")
-        lines.append("")
-        lines.append("**📋 帮助**")
-        lines.append("- **@机器人 /帮助** - 显示此帮助")
-        lines.append("- **@机器人 /状态** - 查看状态")
-        lines.append("")
-        lines.append("**🎭 角色扮演**")
-        lines.append("- **@机器人 /角色 列表** - 查看可用角色")
-        lines.append("- **@机器人 /角色 切换 <名称>** - 切换角色")
-        lines.append("- **@机器人 /角色 创建 <名称> [提示词]** - 创建自定义角色")
-        lines.append("")
-
-        plugin_help_map = {p['name']: p['help'] for p in self._plugins}
-
-        for cat_name, plugin_names in self.PLUGIN_CATEGORIES:
-            matched = {name: plugin_help_map[name] for name in plugin_names if name in plugin_help_map}
-            if not matched:
-                continue
-            lines.append(f"**{cat_name}**")
-            for name, help_msg in matched.items():
-                lines.append(f"- **@机器人 /{help_msg}**")
-            lines.append("")
-
-        lines.append(f"> 📝 版本: **{self.version_name}**")
-        return "\n".join(lines)
 
     def _get_status_text(self) -> str:
         try:
