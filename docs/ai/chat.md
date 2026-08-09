@@ -11,30 +11,47 @@ next:
 
 ## 概述
 
-AI 对话系统由 `AIChat` 类管理，位于 `ai/chat.py`。支持双模型切换（DeepSeek / Google Gemini），整合角色系统、RAG 记忆和多轮对话上下文。
+AI 对话系统由 `AIChat` 类管理，位于 `ai/chat.py`。基于 **Provider 抽象**（`ai/providers.py`）支持多模型（DeepSeek / Google Gemini / 任意 OpenAI 兼容服务），整合角色系统、RAG 记忆、多轮对话上下文、调用限流与费用统计。
 
 ## 架构
 
 ```
-用户消息 → AIChat.run()
+用户消息 → AIChat.run() / run_with_tools()
+  ├── RateLimiter.check() → 超限返回友好提示
   ├── RoleManager.get_system_prompt() → 角色 system prompt
   ├── RAGMemory.get_relevant_context() → 相关历史
   ├── 拼接完整 messages
   │   ├── system prompt + RAG 上下文
   │   ├── 最近 5 条对话历史
   │   └── 当前用户消息
-  └── API 调用 → 返回回复
+  ├── AIProvider.chat() → OpenAI 兼容 / Gemini 实现
+  ├── CostTracker.record() → token/延迟/错误/费用统计
+  └── 返回回复
+```
+
+## Provider 抽象
+
+新增模型只需实现 `AIProvider.chat()`，核心不感知厂商：
+
+```python
+class AIProvider(ABC):
+    async def chat(self, messages, tools=None, **kwargs) -> dict | None: ...
+
+# 内置实现
+OpenAICompatibleProvider   # DeepSeek/OpenAI/SiliconFlow/Moonshot 等，换 base_url+key 即可
+GeminiProvider             # google.generativeai
+create_provider(mode, config, http_client, logger)  # 按 default_mode 创建
 ```
 
 ## 模型配置
 
-### DeepSeek（默认）
+### DeepSeek（默认，OpenAI 兼容）
 
 ```json
 {
   "Others": {
     "default_mode": "Ds",
-    "deepseek_key": "sk-xxxxxxxxxxxx",
+    "deepseek_key": "«redacted:sk-…»",
     "ai_base_url": "https://api.deepseek.com",
     "ai_model": "deepseek-v4-flash",
     "ai_max_tokens": 2000,
@@ -43,7 +60,7 @@ AI 对话系统由 `AIChat` 类管理，位于 `ai/chat.py`。支持双模型切
 }
 ```
 
-`ai_base_url` 兼容任何 OpenAI 格式的 API，可替换为其它兼容服务。
+`ai_base_url` 兼容任何 OpenAI 格式的 API，可替换为其它兼容服务（SiliconFlow、OpenRouter、智谱等只需换 `base_url` / `model` / `api_key`）。
 
 ### Gemini
 
@@ -57,6 +74,23 @@ AI 对话系统由 `AIChat` 类管理，位于 `ai/chat.py`。支持双模型切
 ```
 
 使用 `google.generativeai` SDK，模型为 `gemini-2.0-flash-exp`。
+
+## 限流与费用统计
+
+```json
+{
+  "Others": {
+    "ai_rate_limit_user": 10,
+    "ai_rate_limit_global": 60,
+    "ai_price_input": 1.0,
+    "ai_price_output": 2.0
+  }
+}
+```
+
+- `ai_rate_limit_user` / `ai_rate_limit_global`：每分钟请求上限（滑动窗口），超限返回"请求太频繁"提示
+- `ai_price_input` / `ai_price_output`：元/百万 token 单价，用于预估费用
+- 统计持久化到 `data/ai_stats.json`（请求数/token/平均延迟/错误率/费用），webadmin 仪表盘 `ai_stats` 字段展示
 
 ## 上下文管理
 
@@ -91,9 +125,13 @@ class AIChat:
     def build_system_prompt(self, user_id, user_name, query) -> str:
         """构建 system prompt（角色提示 + RAG 上下文）"""
 
-    async def run(self, user_id, user_name, query) -> str:
-        """执行一次 AI 对话，返回回复文本"""
+    async def run(self, user_id, user_name, query) -> str | None:
+        """执行一次 AI 对话（含限流），返回回复文本"""
+
+    async def run_with_tools(self, user_id, user_name, query, execute_tool_callback, root_users) -> str | None:
+        """带 Function Calling 的 AI 对话，支持多轮工具调用"""
 
     async def handle_message(self, order, user_id, user_name, send_func) -> bool:
         """带错误处理和用户友好提示的消息处理"""
 ```
+
