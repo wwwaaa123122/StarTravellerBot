@@ -21,6 +21,10 @@ DEFAULT_CONFIG = {
         "ai_model": "deepseek-v4-flash",
         "ai_max_tokens": 2000,
         "ai_temperature": 0.7,
+        "ai_rate_limit_user": 10,
+        "ai_rate_limit_global": 60,
+        "ai_price_input": 1.0,
+        "ai_price_output": 2.0,
     },
     "Log_level": "INFO",
     "webadmin": {
