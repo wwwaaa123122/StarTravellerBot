@@ -10,12 +10,18 @@ import os
 import json
 import time
 import logging
+from datetime import timezone, timedelta
 from typing import Optional
 
 import httpx
 from apscheduler.triggers.interval import IntervalTrigger
 
+from Tools.scheduler import get_client
+
 _logger = logging.getLogger("KickPlugin")
+
+# 北京时间 (UTC+8)；显式传入避免 Termux 缺 tzdata 时 IntervalTrigger 的 get_localzone 失败
+BJT = timezone(timedelta(hours=8))
 
 # 配置文件路径
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -225,7 +231,7 @@ async def _monitor_job():
     """APScheduler 定时任务：执行监控检查并动态调整间隔"""
     global _scheduler
 
-    client = getattr(_scheduler, '_client', None) if _scheduler else None
+    client = get_client()
     if not client:
         return
 
@@ -239,7 +245,7 @@ async def _monitor_job():
         _current_interval = new_interval
         _scheduler.reschedule_job(
             "kick_monitor",
-            trigger=IntervalTrigger(seconds=new_interval),
+            trigger=IntervalTrigger(seconds=new_interval, timezone=BJT),
         )
         _logger.info(f"[kick] 检查间隔已更新为 {new_interval}s")
 
@@ -254,7 +260,7 @@ def register_scheduled_jobs(scheduler):
 
     # 初始化检查：启动后 5 秒执行一次，记录当前状态但不通知
     scheduler.add_job(
-        lambda: _init_check(scheduler._client),
+        lambda: _init_check(get_client()),
         trigger=None,
         id="kick_init_check",
         name="Kick 初始化状态检查",
@@ -265,7 +271,7 @@ def register_scheduled_jobs(scheduler):
     # 监控任务
     scheduler.add_job(
         _monitor_job,
-        IntervalTrigger(seconds=_current_interval),
+        IntervalTrigger(seconds=_current_interval, timezone=BJT),
         id="kick_monitor",
         name="Kick 直播监控",
         replace_existing=True,
@@ -276,7 +282,7 @@ def register_scheduled_jobs(scheduler):
 
 # ==================== 插件接口 ====================
 
-TRIGGHT_KEYWORD = "kick"
+TRIGGER_KEYWORD = "kick"
 HELP_MESSAGE = "kick <主播名> -> 查询 Kick 主播直播状态 | kick help 查看更多"
 
 
@@ -535,7 +541,7 @@ async def on_message(event, actions, **kwargs):
             if job is None:
                 _scheduler.add_job(
                     _monitor_job,
-                    IntervalTrigger(seconds=config.get("check_interval", 60)),
+                    IntervalTrigger(seconds=config.get("check_interval", 60), timezone=BJT),
                     id="kick_monitor",
                     name="Kick 直播监控",
                     replace_existing=True,

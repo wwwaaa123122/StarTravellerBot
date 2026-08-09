@@ -11,6 +11,8 @@ from datetime import datetime, timezone, timedelta
 
 from apscheduler.triggers.cron import CronTrigger
 
+from Tools.scheduler import get_client
+
 # 北京时间 (UTC+8)
 BJT = timezone(timedelta(hours=8))
 
@@ -81,7 +83,7 @@ def register_scheduled_jobs(scheduler):
     hour, minute = map(int, send_time.split(":"))
 
     async def wrapper():
-        client = getattr(scheduler, '_client', None)
+        client = get_client()
         if client:
             await _do_scheduled_send(client)
 
@@ -94,7 +96,7 @@ def register_scheduled_jobs(scheduler):
     )
 
 
-TRIGGHT_KEYWORD = "群发"
+TRIGGER_KEYWORD = "群发"
 HELP_MESSAGE = "群发 <内容> - 手动向所有通知群发送消息（管理员专用）"
 
 
