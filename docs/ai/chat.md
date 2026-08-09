@@ -17,7 +17,6 @@ AI 对话系统由 `AIChat` 类管理，位于 `ai/chat.py`。基于 **Provider 
 
 ```
 用户消息 → AIChat.run() / run_with_tools()
-  ├── RateLimiter.check() → 超限返回友好提示
   ├── RoleManager.get_system_prompt() → 角色 system prompt
   ├── RAGMemory.get_relevant_context() → 相关历史
   ├── 拼接完整 messages
@@ -75,20 +74,17 @@ create_provider(mode, config, http_client, logger)  # 按 default_mode 创建
 
 使用 `google.generativeai` SDK，模型为 `gemini-2.0-flash-exp`。
 
-## 限流与费用统计
+## 费用统计
 
 ```json
 {
   "Others": {
-    "ai_rate_limit_user": 10,
-    "ai_rate_limit_global": 60,
     "ai_price_input": 1.0,
     "ai_price_output": 2.0
   }
 }
 ```
 
-- `ai_rate_limit_user` / `ai_rate_limit_global`：每分钟请求上限（滑动窗口），超限返回"请求太频繁"提示
 - `ai_price_input` / `ai_price_output`：元/百万 token 单价，用于预估费用
 - 统计持久化到 `data/ai_stats.json`（请求数/token/平均延迟/错误率/费用），webadmin 仪表盘 `ai_stats` 字段展示
 

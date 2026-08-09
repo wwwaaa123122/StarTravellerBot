@@ -27,8 +27,6 @@ class AISettings:
     ai_model: str = "deepseek-v4-flash"
     ai_max_tokens: int = 2000
     ai_temperature: float = 0.7
-    ai_rate_limit_user: int = 10
-    ai_rate_limit_global: int = 60
     ai_price_input: float = 1.0
     ai_price_output: float = 2.0
 

@@ -1,30 +1,9 @@
 # -*- coding: utf-8 -*-
-"""AI RateLimiter / CostTracker 测试。"""
+"""AI CostTracker 费用统计测试。"""
 
 import json
 
-from ai.rate_limiter import RateLimiter
 from ai.cost_tracker import CostTracker
-
-
-def test_user_rate_limit():
-    limiter = RateLimiter(user_rpm=2, global_rpm=100)
-    assert limiter.check("u1") == (True, 0)
-    limiter.record("u1")
-    assert limiter.check("u1") == (True, 0)
-    limiter.record("u1")
-    allowed, remaining = limiter.check("u1")
-    assert allowed is False
-    assert remaining == 0
-    # 其他用户不受影响
-    assert limiter.check("u2")[0] is True
-
-
-def test_global_rate_limit():
-    limiter = RateLimiter(user_rpm=100, global_rpm=2)
-    for i in range(2):
-        limiter.record(f"u{i}")
-    assert limiter.check("new_user")[0] is False
 
 
 def test_cost_tracker_record_and_summary(tmp_path):
