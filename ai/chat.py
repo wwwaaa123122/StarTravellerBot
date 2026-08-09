@@ -10,6 +10,7 @@ from Tools.rag_memory import RAGMemory
 from ai.role_manager import RoleManager
 from ai.providers import create_provider
 from ai.cost_tracker import CostTracker
+from ai.memory import MemoryManager
 
 CONTACT_URL = "https://xc-lr.cn/about"
 
@@ -22,7 +23,8 @@ class AIChat:
     def __init__(self, config: dict, context: BotContext, rag: RAGMemory,
                  http_client, logger, bot_name: str,
                  role_manager: RoleManager = None,
-                 bot_username: str = "", cost_tracker: Optional[CostTracker] = None):
+                 bot_username: str = "", cost_tracker: Optional[CostTracker] = None,
+                 memory: Optional[MemoryManager] = None):
         self.config = config
         self.context = context
         self.rag = rag
@@ -41,11 +43,15 @@ class AIChat:
             price_output=float(others.get("ai_price_output", 2.0)),
             logger=logger,
         )
+        self.memory = memory or MemoryManager(os.path.join(PROJECT_ROOT, "data"), provider=self.provider, logger=logger)
 
     def build_system_prompt(self, user_id: str, user_name: str, query: str) -> str:
         sys_prompt = self.role_manager.get_system_prompt(
             user_id, self.bot_name, user_name, self.bot_username
         )
+        long_term = self.memory.get_long_term(user_id)
+        if long_term:
+            sys_prompt = f"{sys_prompt}\n\n{long_term}"
         rag_context = self.rag.get_relevant_context(user_id, query)
         if rag_context:
             sys_prompt = f"{sys_prompt}\n\n{rag_context}"
@@ -61,8 +67,17 @@ class AIChat:
             self.context.user_lists[user_id] = []
         self.context.user_lists[user_id].append({"role": "user", "content": question})
         self.context.user_lists[user_id].append({"role": "assistant", "content": answer})
+        # 超限压缩：前 10 条异步摘要入长期记忆，短期只留最近 10 条
         if len(self.context.user_lists[user_id]) > 20:
-            self.context.user_lists[user_id] = self.context.user_lists[user_id][-20:]
+            old = self.context.user_lists[user_id][:-10]
+            self.context.user_lists[user_id] = self.context.user_lists[user_id][-10:]
+            asyncio.create_task(self._compact_history(user_id, old))
+
+    async def _compact_history(self, user_id: str, history: list):
+        try:
+            await self.memory.compact(user_id, history)
+        except Exception as e:
+            self.logger.error(f"[记忆] 压缩失败 {user_id}: {e}")
 
     def _track(self, started: float, error: bool = False, usage: Optional[dict] = None):
         usage = usage or {}
