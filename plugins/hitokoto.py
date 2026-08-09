@@ -2,7 +2,7 @@ import httpx
 import logging
 _logger = logging.getLogger("hitokoto")
 
-TRIGGHT_KEYWORD = "一言"
+TRIGGER_KEYWORD = "一言"
 HELP_MESSAGE = "一言 -> 找一句好听的名言👍"
 
 

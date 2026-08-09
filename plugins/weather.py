@@ -5,7 +5,7 @@ import httpx
 import logging
 _logger = logging.getLogger("weather")
 
-TRIGGHT_KEYWORD = "天气"
+TRIGGER_KEYWORD = "天气"
 HELP_MESSAGE = "天气 <城市> -> 查询天气信息"
 
 # 天气描述中英文映射

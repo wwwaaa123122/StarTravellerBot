@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 _logger = logging.getLogger("douyin_parse")
 
-TRIGGHT_KEYWORD = "Any"
+TRIGGER_KEYWORD = "Any"
 HELP_MESSAGE = "抖音 <分享链接或视频ID> -> 解析视频信息与封面"
 
 UA = {

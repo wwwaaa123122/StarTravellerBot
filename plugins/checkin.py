@@ -12,7 +12,7 @@ import httpx
 
 _logger = logging.getLogger("checkin")
 
-TRIGGHT_KEYWORD = "签到"
+TRIGGER_KEYWORD = "签到"
 HELP_MESSAGE = "签到 -> 签到获取积分和好感度"
 
 # 数据库路径

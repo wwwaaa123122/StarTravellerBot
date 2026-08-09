@@ -8,7 +8,7 @@ import aiosqlite
 
 _logger = logging.getLogger("affection")
 
-TRIGGHT_KEYWORD = "好感度"
+TRIGGER_KEYWORD = "好感度"
 HELP_MESSAGE = "好感度 -> 查询好感度信息"
 
 # 数据库路径

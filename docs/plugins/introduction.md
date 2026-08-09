@@ -26,7 +26,7 @@ client.on_ready()
   → _load_plugins()
     → 遍历 plugins/ 目录
     → importlib 动态导入每个模块
-    → 检查 TRIGGHT_KEYWORD 和 on_message
+    → 检查 TRIGGER_KEYWORD 和 on_message
     → 注册到 _plugins 列表
     → 检查 background_tasks 函数
     → 排序（"Any" 插件放最后）
@@ -40,7 +40,7 @@ client.on_ready()
 ```python
 # plugins/hello.py
 
-TRIGGHT_KEYWORD = "你好"
+TRIGGER_KEYWORD = "你好"
 HELP_MESSAGE = "你好 -> 向机器人打招呼"
 
 
@@ -54,7 +54,7 @@ async def on_message(event, actions, **kwargs):
 
 | 导出名 | 类型 | 说明 |
 | :--- | :--- | :--- |
-| `TRIGGHT_KEYWORD` | `str` | 触发关键字，消息以此开头时触发（`"Any"` 匹配所有） |
+| `TRIGGER_KEYWORD` | `str` | 触发关键字，消息以此开头时触发（`"Any"` 匹配所有） |
 | `HELP_MESSAGE` | `str` | 帮助信息，在 `帮助` 命令中展示 |
 | `on_message` | `async callable` | 消息处理函数，返回 `True` 表示已处理 |
 
@@ -103,13 +103,13 @@ async def on_message(event, actions, **kwargs):
 
 ### "Any" 关键字插件
 
-将 `TRIGGHT_KEYWORD` 设为 `"Any"` 的插件会匹配所有消息，在所有关键字插件之后执行。适用于：
+将 `TRIGGER_KEYWORD` 设为 `"Any"` 的插件会匹配所有消息，在所有关键字插件之后执行。适用于：
 - 消息日志记录
 - 内容过滤
 - 兜底回复
 
 ```python
-TRIGGHT_KEYWORD = "Any"
+TRIGGER_KEYWORD = "Any"
 HELP_MESSAGE = "（通用处理器）"
 
 async def on_message(event, actions, **kwargs):

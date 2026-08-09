@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai.role_manager import RoleManager
 
-TRIGGHT_KEYWORD = "角色"
+TRIGGER_KEYWORD = "角色"
 HELP_MESSAGE = "角色 -> 角色扮演管理（切换/创建/查看/删除/列表/帮助）"
 
 _role_manager = None

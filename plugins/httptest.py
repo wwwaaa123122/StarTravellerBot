@@ -5,7 +5,7 @@ import asyncio
 import time
 from urllib.parse import urlparse
 
-TRIGGHT_KEYWORD = "http"
+TRIGGER_KEYWORD = "http"
 HELP_MESSAGE = "http <网址> -> 检查网址的HTTP状态码"
 
 

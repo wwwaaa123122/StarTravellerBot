@@ -161,7 +161,7 @@ def _load_roles():
 
 def _scan_plugins():
     """扫描 plugins/*.py，提取关键字与帮助信息。"""
-    _kw = re.compile(r'TRIGGHT_KEYWORD\s*=\s*"([^"]*)"')
+    _kw = re.compile(r'TRIG(?:GER|GHT)_KEYWORD\s*=\s*"([^"]*)"')
     _help = re.compile(r'HELP_MESSAGE\s*=\s*"([^"]*)"')
     plugins = []
     if not os.path.isdir(PLUGINS_DIR):

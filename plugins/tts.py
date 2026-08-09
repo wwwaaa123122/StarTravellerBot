@@ -5,7 +5,7 @@ import asyncio
 import logging
 _logger = logging.getLogger("tts")
 
-TRIGGHT_KEYWORD = "语音"
+TRIGGER_KEYWORD = "语音"
 HELP_MESSAGE = "语音 <文本> -> 将文本转为语音并发送"
 
 

@@ -7,7 +7,7 @@ import socket
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-TRIGGHT_KEYWORD = "whois"
+TRIGGER_KEYWORD = "whois"
 HELP_MESSAGE = "whois <域名> -> 查询域名注册信息（含中文翻译）"
 
 import logging

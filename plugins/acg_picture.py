@@ -2,7 +2,7 @@ import time as _time
 import logging
 _logger = logging.getLogger("acg_picture")
 
-TRIGGHT_KEYWORD = "生图 ACG "
+TRIGGER_KEYWORD = "生图 ACG "
 HELP_MESSAGE = "生图 ACG (任意类型) -> 制作精美二次元壁纸 (发送 `@机器人 生图 ACG 帮助` 查看帮助菜单)"
 
 _cooldowns: dict = {}

@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 _logger = logging.getLogger("bilibili_parse")
 
-TRIGGHT_KEYWORD = "Any"
+TRIGGER_KEYWORD = "Any"
 HELP_MESSAGE = "b站 <b23.tv短链或BV号> -> 解析视频信息与封面"
 
 HEADERS = {
