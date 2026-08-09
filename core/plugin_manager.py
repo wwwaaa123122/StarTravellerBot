@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 import base64
 
 from Tools.scheduler import get_scheduler
+from core.permissions import is_root
 
 PLUGIN_CATEGORIES = [
     ("🎯 签到系统", ["checkin", "affection"]),
@@ -371,6 +372,7 @@ class PluginManager:
             'bot_name': self.client.bot_name,
             'order': order,
             'ROOT_User': self.client.root_users,
+            'is_root': lambda user_id: is_root(user_id, self.client.config),
             'Super_User': [],
             'Manage_User': [],
             'config': self.client.config,

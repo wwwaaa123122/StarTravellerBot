@@ -2,6 +2,7 @@
 """配置默认值：config.json 缺省字段的兜底。"""
 
 DEFAULT_CONFIG = {
+    "black_list": [],
     "OpenQQ": {
         "appid": "",
         "secret": "",

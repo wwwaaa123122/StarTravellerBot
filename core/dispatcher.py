@@ -6,6 +6,8 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Set
 
+from core.permissions import is_blacklisted
+
 
 @dataclass
 class Scene:
@@ -49,6 +51,11 @@ class Dispatcher:
                 content = client._strip_mention(content)
             if scene.strip_mentions_regex:
                 content = re.sub(r'<@!?\w+>', '', content).strip()
+
+            # 黑名单：静默忽略，不记录统计
+            if user_id and is_blacklisted(user_id, client.config):
+                client.logger.info(f"[黑名单] 忽略 {user_id} 的消息")
+                return
 
             nickname = client._try_get_nickname(message)
             client.stats.record_nickname(user_id, nickname)

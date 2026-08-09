@@ -29,6 +29,7 @@ class FakeClient:
         self.version_name = "1.0"
         self.allow_ai = True
         self.logger = logging.getLogger("test-dispatcher")
+        self.config = {}
         self.stats = FakeStats()
         self.context = types.SimpleNamespace(user_lists={})
         self.plugin_hits = []
@@ -179,6 +180,16 @@ async def test_c2c_empty_greets():
     client = _make_client()
     await Dispatcher(client).route(_c2c_msg(""), SCENE_C2C)
     assert "你好呀~ 我是测试，有什么可以帮你的吗？" in client.sent
+
+
+@pytest.mark.asyncio
+async def test_blacklisted_user_ignored():
+    client = _make_client()
+    client.config = {"black_list": ["banned"]}
+    await Dispatcher(client).route(_c2c_msg("ping", user="banned"), SCENE_C2C)
+    assert client.ping_hits == 0
+    assert client.ai_calls == []
+    assert client.stats.messages == 0
 
 
 @pytest.mark.asyncio

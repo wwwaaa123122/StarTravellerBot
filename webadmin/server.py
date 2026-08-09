@@ -610,10 +610,11 @@ def api_stats_reset():
 @require_auth
 def api_permissions():
     cfg = _bot_config()
+    others = cfg.get("Others", {})
     return jsonify({
-        "root_users": cfg.get("ROOT_User", []),
+        "root_users": others.get("ROOT_User", []),
         "blacklist": cfg.get("black_list", []),
-        "allow_ai": cfg.get("Others", {}).get("allow_ai", True),
+        "allow_ai": others.get("allow_ai", True),
     })
 
 
@@ -624,12 +625,13 @@ def api_permissions_put():
     cfg = _bot_config()
     if not CONFIG_FILE:
         return jsonify({"error": "config_not_found", "message": "config.json 未找到"}), 400
+    others = cfg.setdefault("Others", {})
     if "root_users" in body:
-        cfg["ROOT_User"] = body["root_users"]
+        others["ROOT_User"] = body["root_users"]
     if "blacklist" in body:
         cfg["black_list"] = body["blacklist"]
     if "allow_ai" in body:
-        cfg.setdefault("Others", {})["allow_ai"] = body["allow_ai"]
+        others["allow_ai"] = body["allow_ai"]
     _write_json(CONFIG_FILE, cfg)
     return jsonify({"ok": True})
 
