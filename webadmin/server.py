@@ -297,6 +297,17 @@ def _read_plugins_enabled():
     return _read_json(PLUGINS_ENABLED_FILE, {}) or {}
 
 
+def _read_ai_stats():
+    """读取 AI 调用明细统计（由 ai/cost_tracker.py 写入）。"""
+    data = _read_json(os.path.join(DATA_DIR, "ai_stats.json"), {}) or {}
+    requests = data.get("requests", 0)
+    data["avg_latency"] = round(data.get("latency_sum", 0) / requests, 2) if requests else 0.0
+    data["error_rate"] = round(data.get("errors", 0) / requests, 4) if requests else 0.0
+    data["total_tokens"] = data.get("prompt_tokens", 0) + data.get("completion_tokens", 0)
+    data["cost"] = round(data.get("cost", 0), 4)
+    return data
+
+
 def _read_prompts():
     return _read_json(PROMPTS_FILE, {"prompts": {}}) or {"prompts": {}}
 
@@ -431,6 +442,7 @@ def api_overview():
     visit = _visit_activity(14)
     bot = _bot_process()
     bot_stats = _read_stats()
+    ai_stats = _read_ai_stats()
     return jsonify({
         "stats": {
             "users": len(users),
@@ -447,6 +459,13 @@ def api_overview():
             "ai_calls_today": bot_stats["ai_calls_today"]["count"],
             "total_tokens": bot_stats["total_tokens"],
             "tokens_today": bot_stats["tokens_today"]["count"],
+        },
+        "ai_stats": {
+            "requests": ai_stats.get("requests", 0),
+            "total_tokens": ai_stats.get("total_tokens", 0),
+            "avg_latency": ai_stats.get("avg_latency", 0),
+            "error_rate": ai_stats.get("error_rate", 0),
+            "cost": ai_stats.get("cost", 0),
         },
         "trend": days,
         "activity": visit["days"],
@@ -644,6 +663,8 @@ def api_plugins_toggle_put():
         if isinstance(state, bool):
             enabled[name] = state
     _write_json(PLUGINS_ENABLED_FILE, enabled)
+    # 写重载标记，机器人进程在 ~10s 内热重载插件
+    _write_json(os.path.join(DATA_DIR, "reload.flag"), {"ts": time.time()})
     return jsonify({"ok": True, "plugins": enabled})
 
 

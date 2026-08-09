@@ -110,6 +110,25 @@ class XCLRClient(QQClient):
 
         self.plugin_manager.load_plugins()
         await self._start_scheduler()
+        asyncio.create_task(self._watch_plugin_reload())
+
+    async def _watch_plugin_reload(self):
+        """监听 data/reload.flag（webadmin 写入），触发插件热重载。"""
+        flag = os.path.join(PROJECT_ROOT, "data", "reload.flag")
+        while True:
+            await asyncio.sleep(10)
+            if not os.path.exists(flag):
+                continue
+            try:
+                self.plugin_manager.reload()
+                self.logger.info("插件热重载完成")
+            except Exception as e:
+                self.logger.error(f"插件热重载失败: {e}")
+            finally:
+                try:
+                    os.unlink(flag)
+                except OSError:
+                    pass
 
     async def _start_scheduler(self):
         """启动 APScheduler 调度器，注入客户端引用。"""

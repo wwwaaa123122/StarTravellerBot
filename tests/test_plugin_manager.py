@@ -90,6 +90,22 @@ def test_plugin_without_keyword_skipped(tmp_path, manager):
     assert manager.plugins == []
 
 
+def test_enabled_map_disables_plugin(tmp_path, manager):
+    _write_plugin(tmp_path, "ping.py", _PLUGIN_TEMPLATE.format(kw="ping", help="ping"))
+    _write_plugin(tmp_path, "weather.py", _PLUGIN_TEMPLATE.format(kw="天气", help="天气"))
+    manager.load_plugins(plugin_dir=str(tmp_path), enabled_map={"ping": False})
+    assert [p["name"] for p in manager.plugins] == ["weather"]
+
+
+def test_reload_refreshes_plugins(tmp_path, manager):
+    _write_plugin(tmp_path, "ping.py", _PLUGIN_TEMPLATE.format(kw="ping", help="ping"))
+    manager.load_plugins(plugin_dir=str(tmp_path))
+    assert len(manager.plugins) == 1
+    _write_plugin(tmp_path, "weather.py", _PLUGIN_TEMPLATE.format(kw="天气", help="天气"))
+    manager.reload(plugin_dir=str(tmp_path))
+    assert sorted(p["name"] for p in manager.plugins) == ["ping", "weather"]
+
+
 def test_try_plugins_match_and_skip(tmp_path, manager):
     _write_plugin(tmp_path, "ping.py", _PLUGIN_TEMPLATE.format(kw="ping", help="ping"))
     manager.load_plugins(plugin_dir=str(tmp_path))

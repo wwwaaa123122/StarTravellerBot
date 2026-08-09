@@ -3,6 +3,7 @@
 
 import importlib.util
 import inspect
+import json
 import os
 import time
 import traceback
@@ -81,7 +82,7 @@ class PluginManager:
             return True
         return False
 
-    def load_plugins(self, plugin_dir: Optional[str] = None):
+    def load_plugins(self, plugin_dir: Optional[str] = None, enabled_map: Optional[dict] = None):
         plugin_dir = plugin_dir or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "plugins")
         self.plugins.clear()
         self.plugins_help.clear()
@@ -90,11 +91,18 @@ class PluginManager:
             self.logger.warning(f"插件目录不存在: {plugin_dir}")
             return
 
+        # webadmin 开关：data/plugins_enabled.json（缺失视为启用）
+        if enabled_map is None:
+            enabled_map = self._read_enabled_map()
+
         for filename in sorted(os.listdir(plugin_dir)):
             if not self.is_plugin_file(filename):
                 continue
 
             plugin_name = filename[:-3]
+            if enabled_map.get(plugin_name, True) is False:
+                self.logger.info(f"插件 {plugin_name} 已被 webadmin 禁用，跳过")
+                continue
             try:
                 plugin_name, module = self.load_module(plugin_dir, filename)
                 registered = self.register(plugin_name, module)
@@ -107,6 +115,21 @@ class PluginManager:
 
         self.plugins.sort(key=lambda p: (p['is_any'], -max(len(k) for k in p['keywords']), p['name']))
         self.logger.info(f"插件加载完成: {len(self.plugins)} 个命令插件")
+
+    def _read_enabled_map(self) -> dict:
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "plugins_enabled.json")
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return data if isinstance(data, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            pass
+        return {}
+
+    def reload(self, plugin_dir: Optional[str] = None):
+        """热重载：清空并重新加载全部插件（含定时任务）。"""
+        self.load_plugins(plugin_dir=plugin_dir)
 
     async def try_plugins(self, message: Any, order: str, skip_plugins: Optional[set] = None) -> bool:
         """按关键字匹配并执行插件，返回是否有插件处理了消息。"""
