@@ -90,11 +90,20 @@ create_provider(mode, config, http_client, logger)  # 按 default_mode 创建
 
 ## 上下文管理
 
-对话历史存储在 `BotContext.user_lists` 中，以用户 OpenID 为 key：
+对话历史采用**分层记忆**（`ai/memory.py`）：
+
+```
+短期上下文（BotContext.user_lists，最近 10 条）
+    ↓ 超 20 条时异步压缩
+摘要（AIProvider 生成，data/memories.json，每用户最近 20 条摘要）
+    ↓ 注入 system prompt
+RAG 长期记忆（bigram TF-IDF 检索）
+```
 
 - 每次对话自动追加 user 和 assistant 消息
-- 最多保留 20 条记录（超限截断）
-- 发送 `注销` 命令清除上下文
+- 短期超过 20 条时，前 10 条异步摘要进长期记忆，短期只留最近 10 条（控制 token 消耗）
+- system prompt 拼接顺序：角色提示 → 长期摘要 → RAG 上下文
+- 发送 `注销` 命令清除短期上下文（长期摘要保留）
 
 ### RAG 记忆
 
