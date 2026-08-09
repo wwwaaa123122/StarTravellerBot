@@ -69,8 +69,11 @@ async def _fetch_geo(ip: str) -> dict:
         return {"error": str(e)}
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
     """处理 ping 命令"""
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     content = event.message if hasattr(event, 'message') else ""
     
     # 提取目标

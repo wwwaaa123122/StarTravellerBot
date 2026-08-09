@@ -16,7 +16,10 @@ API_URLS = {
 }
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     order = kwargs.get('order', '')
     user_id = event.user_id
     now = _time.time()

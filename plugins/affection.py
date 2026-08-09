@@ -82,8 +82,11 @@ def _get_affection_bar(affection: int) -> str:
     return f"{bar} {int(progress * 100)}%"
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
     """查询好感度"""
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     user_id = event.user_id
     
     # 加载用户数据

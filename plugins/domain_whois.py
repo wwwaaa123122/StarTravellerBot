@@ -184,8 +184,11 @@ def _format_whois_info(domain: str) -> str:
         return f"Whois 查询失败: {str(e)}\n请检查域名格式是否正确，或稍后重试。"
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
     """处理 whois 查询"""
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     content = event.message if hasattr(event, 'message') else ""
 
     # 提取域名

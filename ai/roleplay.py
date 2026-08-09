@@ -18,7 +18,10 @@ def _get_manager():
     return _role_manager
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     content = getattr(event, "message", "")
     user_id = getattr(event, "user_id", "")
     parts = content.strip().split(maxsplit=1)

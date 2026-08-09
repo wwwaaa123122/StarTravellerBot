@@ -100,8 +100,11 @@ TRIGGER_KEYWORD = "群发"
 HELP_MESSAGE = "群发 <内容> - 手动向所有通知群发送消息（管理员专用）"
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
     """处理手动群发命令：群发 <内容>"""
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     order = kwargs.get("order", "")
     user_id = str(getattr(event, "user_id", ""))
     config = kwargs.get("config", {})

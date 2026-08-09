@@ -9,8 +9,11 @@ TRIGGER_KEYWORD = "http"
 HELP_MESSAGE = "http <网址> -> 检查网址的HTTP状态码"
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
     """处理HTTP状态检测"""
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     content = event.message if hasattr(event, 'message') else ""
 
     # 提取网址

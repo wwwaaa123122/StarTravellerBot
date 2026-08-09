@@ -9,7 +9,10 @@ HEADERS = {"User-Agent": "xiaoxiaoapi/1.0.0 (https://xxapi.cn)"}
 API_URL = "https://v2.xxapi.cn/api/qrcode"
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     order = kwargs.get('order', '')
     start = order.find("转码 ")
     if start == -1:

@@ -11,7 +11,10 @@ DOMAIN = re.compile(r"^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[
 KEYWORDS = ["mc状态", "我的世界状态", "minecraft状态", "jv状态"]
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     msg = event.message.strip() if hasattr(event, 'message') else ''
     if not msg:
         return False

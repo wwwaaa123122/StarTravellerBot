@@ -33,6 +33,15 @@ async def on_message(event, actions, **kwargs):
     return True
 """
 
+# 新 API 插件：on_message(ctx)
+_NEW_API_PLUGIN = """\
+TRIGGER_KEYWORD = "新接口"
+HELP_MESSAGE = "new-api-help"
+
+async def on_message(ctx):
+    return ctx.order == "新接口" and ctx.user_id == "u1" and callable(ctx.is_root)
+"""
+
 
 def _make_client():
     client = types.SimpleNamespace()
@@ -79,6 +88,21 @@ def test_legacy_trigg_ht_keyword_compat(tmp_path, manager):
     manager.load_plugins(plugin_dir=str(tmp_path))
     assert len(manager.plugins) == 1
     assert manager.plugins[0]["keywords"] == ["旧版"]
+
+
+def test_new_api_context_plugin(tmp_path, manager):
+    _write_plugin(tmp_path, "newapi.py", _NEW_API_PLUGIN)
+    manager.load_plugins(plugin_dir=str(tmp_path))
+    assert len(manager.plugins) == 1
+    assert manager.is_new_api(manager.plugins[0]) is True
+
+    msg = types.SimpleNamespace(author=types.SimpleNamespace(member_openid="u1", user_openid="u1"))
+    loop = __import__("asyncio").get_event_loop_policy().new_event_loop()
+    try:
+        # ctx.order == "新接口" 且 ctx.user_id == "u1"，插件返回 True
+        assert loop.run_until_complete(manager.try_plugins(msg, "新接口")) is True
+    finally:
+        loop.close()
 
 
 def test_plugin_without_keyword_skipped(tmp_path, manager):

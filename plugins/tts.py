@@ -69,7 +69,10 @@ async def _generate_tts(text: str, config: dict) -> str:
     return output_path
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     content = event.message if hasattr(event, 'message') else ""
 
     text = content

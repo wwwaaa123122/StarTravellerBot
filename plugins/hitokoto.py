@@ -6,7 +6,10 @@ TRIGGER_KEYWORD = "一言"
 HELP_MESSAGE = "一言 -> 找一句好听的名言👍"
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get("https://international.v1.hitokoto.cn/")

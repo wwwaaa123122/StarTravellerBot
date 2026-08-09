@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 import base64
 
 from Tools.scheduler import get_scheduler
+from core.context import PluginContext
 from core.permissions import is_root
 
 PLUGIN_CATEGORIES = [
@@ -356,13 +357,13 @@ class PluginManager:
 
         return PluginActions()
 
-    def build_kwargs(self, plugin: dict, message: Any, order: str) -> dict:
+    def _build_compat(self, message: Any, order: str) -> dict:
         adapted_event = self.adapt_message_for_plugin(message, order)
         actions = self.create_plugin_actions(message)
         manager, segments, events = self.create_compat_objects()
         cooldowns = {}
 
-        available = {
+        return {
             'event': adapted_event,
             'actions': actions,
             'Manager': manager,
@@ -383,6 +384,14 @@ class PluginManager:
             'client': self.client,
         }
 
+    def build_context(self, plugin: dict, message: Any, order: str):
+        """新 API：构造 PluginContext。"""
+        compat = self._build_compat(message, order)
+        return PluginContext(self.client, message, order, compat['event'], compat['actions'], compat)
+
+    def build_kwargs(self, plugin: dict, message: Any, order: str) -> dict:
+        """旧 API：按签名过滤 kwargs（含 **kwargs 全量注入）。"""
+        available = self._build_compat(message, order)
         sig = inspect.signature(plugin['on_message'])
         kwargs = {name: available[name] for name in sig.parameters if name in available}
         has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
@@ -390,9 +399,18 @@ class PluginManager:
             kwargs.update({key: value for key, value in available.items() if key not in kwargs})
         return kwargs
 
+    @staticmethod
+    def is_new_api(plugin: dict) -> bool:
+        """新 API 判定：唯一参数名为 ctx/context。"""
+        params = list(inspect.signature(plugin['on_message']).parameters.values())
+        return len(params) == 1 and params[0].name in ('ctx', 'context')
+
     async def execute(self, plugin: dict, message: Any, order: str) -> bool:
         try:
-            result = await plugin['on_message'](**self.build_kwargs(plugin, message, order))
+            if self.is_new_api(plugin):
+                result = await plugin['on_message'](self.build_context(plugin, message, order))
+            else:
+                result = await plugin['on_message'](**self.build_kwargs(plugin, message, order))
             if result:
                 self.logger.info(f"[插件] {plugin['name']} 处理了消息")
                 return True

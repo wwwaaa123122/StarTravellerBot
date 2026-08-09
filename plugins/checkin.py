@@ -160,8 +160,11 @@ async def _fetch_hitokoto() -> str:
         return "今日签到，好运连连~"
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
     """处理签到命令"""
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     user_id = str(event.user_id)
     today = datetime.now().strftime("%Y-%m-%d")
 

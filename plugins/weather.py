@@ -57,8 +57,11 @@ def _translate_weather(desc: str) -> str:
     return desc
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
     """处理天气查询"""
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     content = event.message if hasattr(event, 'message') else ""
     
     # 提取城市名

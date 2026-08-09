@@ -354,7 +354,10 @@ def _generate_card(
     return buf
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     order = kwargs.get("order", "") or ""
     raw = _extract_aweme_id(order)
     if not raw:

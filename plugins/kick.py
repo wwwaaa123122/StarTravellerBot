@@ -286,8 +286,11 @@ TRIGGER_KEYWORD = "kick"
 HELP_MESSAGE = "kick <主播名> -> 查询 Kick 主播直播状态 | kick help 查看更多"
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
     """插件命令处理入口"""
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     global _scheduler, _current_interval
     content = event.message if hasattr(event, 'message') else ""
 

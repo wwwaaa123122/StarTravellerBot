@@ -171,9 +171,8 @@ class XCLRClient(QQClient):
             return False
 
         from ai.roleplay import on_message as roleplay_on_message
-        kwargs = self.plugin_manager.build_kwargs({'on_message': roleplay_on_message}, message, content)
-        # kwargs 已含 event/actions，直接展开避免重复传参
-        return await roleplay_on_message(**kwargs)
+        ctx = self.plugin_manager.build_context({'on_message': roleplay_on_message}, message, content)
+        return await roleplay_on_message(ctx)
 
     async def _handle_ai_chat(self, message, order, user_id, user_name, use_markdown=False):
         """统一的 AI 对话处理（支持 Function Calling）"""

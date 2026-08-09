@@ -334,7 +334,10 @@ def _generate_card(
     return buf
 
 
-async def on_message(event, actions, **kwargs):
+async def on_message(ctx):
+    event = ctx.event
+    actions = ctx.actions
+    kwargs = ctx.kwargs
     order = kwargs.get("order", "") or ""
     target = _extract_target(order)
     if not target:
