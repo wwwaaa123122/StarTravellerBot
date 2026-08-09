@@ -6,6 +6,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Set
 
+from core.dedup import MessageDedup
 from core.permissions import is_blacklisted
 
 
@@ -33,10 +34,11 @@ class Scene:
 
 
 class Dispatcher:
-    """消息分发：昵称记录 -> 统计 -> 内置指令 -> 插件 -> AI。"""
+    """消息分发：去重 -> 黑名单 -> 昵称记录 -> 统计 -> 内置指令 -> 插件 -> AI。"""
 
     def __init__(self, client):
         self.client = client
+        self.dedup = MessageDedup()
 
     async def route(self, message, scene: Scene):
         client = self.client
@@ -46,6 +48,12 @@ class Dispatcher:
             author = getattr(message, "author", None)
             user_id = str(getattr(author, scene.user_id_attr, "") or "")
             group_id = getattr(message, scene.group_attr, None)
+
+            # 网关重放去重（按场景+消息 id）
+            message_id = getattr(message, "id", None)
+            if message_id and self.dedup.is_duplicate(f"{scene.name}:{message_id}"):
+                client.logger.info(f"[去重] 忽略重复消息 {scene.name}/{message_id}")
+                return
 
             if scene.strip_mention:
                 content = client._strip_mention(content)
