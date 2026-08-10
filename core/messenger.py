@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
-"""消息发送：文本/Markdown 发送、回复、@提及剥离、Markdown 语法探测。"""
 
 import time
 
 
 class Messenger:
-    """统一消息发送；client 提供 api 与 logger。"""
 
     def __init__(self, client):
         self.client = client
         self.logger = client.logger
 
     async def send_message(self, message, content=None, msg_type=0, markdown=None):
-        """发送消息，自动识别消息类型（单聊/群聊）。"""
         group_openid = getattr(message, 'group_openid', None)
         try:
             if group_openid:
@@ -58,7 +55,6 @@ class Messenger:
             return False
 
     async def reply(self, message, content=None, markdown=None):
-        """统一的回复接口，自动适配消息类型。"""
         if hasattr(message, 'reply'):
             kwargs = {"content": content}
             if markdown:

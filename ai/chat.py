@@ -18,7 +18,6 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class AIChat:
-    """AI 对话管理器：角色系统 + RAG 记忆 + Provider 抽象 + 费用统计。"""
 
     def __init__(self, config: dict, context: BotContext, rag: RAGMemory,
                  http_client, logger, bot_name: str,
@@ -67,7 +66,6 @@ class AIChat:
             self.context.user_lists[user_id] = []
         self.context.user_lists[user_id].append({"role": "user", "content": question})
         self.context.user_lists[user_id].append({"role": "assistant", "content": answer})
-        # 超限压缩：前 10 条异步摘要入长期记忆，短期只留最近 10 条
         if len(self.context.user_lists[user_id]) > 20:
             old = self.context.user_lists[user_id][:-10]
             self.context.user_lists[user_id] = self.context.user_lists[user_id][-10:]
@@ -116,7 +114,6 @@ class AIChat:
             return False
 
     async def _api_call(self, question: str, sys_prompt: str, user_id: str) -> Optional[str]:
-        """无工具调用路径；失败返回 None。"""
         messages = [{"role": "system", "content": sys_prompt}]
         messages.extend(self._history_messages(user_id))
         messages.append({"role": "user", "content": question})
@@ -133,7 +130,6 @@ class AIChat:
 
     async def run_with_tools(self, user_id: str, user_name: str, query: str,
                              execute_tool_callback, root_users: set) -> Optional[str]:
-        """带 Function Calling 的 AI 对话，支持多轮工具调用。"""
         from ai.function_calling import (
             get_available_tools,
             FUNCTION_CALLING_SYSTEM_PROMPT,

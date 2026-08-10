@@ -41,7 +41,7 @@ async function togglePlugin(plugin, newVal) {
     ElMessage.success(`"${name}" 已${newVal ? "启用" : "禁用"}`);
   } catch (e) {
     ElMessage.error(e.message);
-    plugin.enabled = !newVal; // 回滚
+    plugin.enabled = !newVal;
   } finally {
     toggling.value[name] = false;
   }

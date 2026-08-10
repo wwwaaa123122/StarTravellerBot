@@ -1,20 +1,15 @@
 # -*- coding: utf-8 -*-
-"""AI 调用统计与费用估算：请求数 / token / 延迟 / 错误 / 预估费用。
-
-数据持久化到 data/ai_stats.json（原子写入），供 webadmin 展示。
-"""
 
 import json
 import os
 import time
 from typing import Optional
 
-DEFAULT_PRICE_INPUT = 1.0   # 元 / 百万 token（输入）
-DEFAULT_PRICE_OUTPUT = 2.0  # 元 / 百万 token（输出）
+DEFAULT_PRICE_INPUT = 1.0
+DEFAULT_PRICE_OUTPUT = 2.0
 
 
 class CostTracker:
-    """记录每次 AI 调用的 token/延迟/错误，并估算费用。"""
 
     def __init__(self, data_dir: str, price_input: float = DEFAULT_PRICE_INPUT,
                  price_output: float = DEFAULT_PRICE_OUTPUT, logger=None):
@@ -57,7 +52,6 @@ class CostTracker:
 
     def record(self, prompt_tokens: int = 0, completion_tokens: int = 0,
                latency: float = 0.0, error: bool = False):
-        """记录一次调用（成功或失败）。"""
         try:
             data = self._load()
             data["requests"] += 1
@@ -73,7 +67,6 @@ class CostTracker:
             pass
 
     def summary(self) -> dict:
-        """今日统计概览（含平均延迟与错误率）。"""
         data = self._load()
         requests = data["requests"]
         data["avg_latency"] = round(data["latency_sum"] / requests, 2) if requests else 0.0

@@ -37,7 +37,7 @@ STAR_DEEPSEEK_KEY=你的DeepSeek密钥
 STAR_TRAVELLER_ADMIN_PASSWORD=管理后台密码
 ```
 
-AI 相关配置（模型、base_url、max_tokens 等）在仓库根目录 `config.json` 的 `Others` 段，环境变量优先级更高。
+AI 相关配置（模型、base_url、max_tokens 等）同样通过 `.env` 中的 `STAR_*` 环境变量配置，模板见 `.env.example`。
 
 ### 3. 运行
 
@@ -49,8 +49,8 @@ python main.py
 
 ```
 StarTravellerBot/
-├── main.py          # 入口，加载 .env + config.json，创建 XCLRClient
-├── config.json      # 机器人配置（AI 密钥、机器人名称、ROOT_User 等）
+├── main.py          # 入口，加载 .env，创建 XCLRClient
+├── .env.example     # 配置模板（复制为 .env 并填写）
 ├── client.py        # 核心客户端，消息分发 + AI 调用
 ├── core/            # 核心模块
 │   ├── plugin_manager.py  # 插件加载/匹配/执行
@@ -122,10 +122,10 @@ StarTravellerBot/
 
 ## 配置
 
-配置优先级：环境变量 > `.env` > `config.json` > 内置默认值。
+配置优先级：环境变量 > `.env` > 内置默认值。
 
 - `.env`: `STAR_QO_APPID`、`STAR_QO_SECRET`（必填）、AI 密钥、管理后台密码
-- `config.json`: AI 模型参数、机器人名称、ROOT_User、webadmin 等
+- 全部配置键见 `.env.example`（机器人名称、ROOT_User、webadmin、定时群发等）
 
 ## 注意事项
 

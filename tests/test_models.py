@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""Model / 消息模型测试：属性访问、嵌套包装、reply() 路由"""
 
 import pytest
 

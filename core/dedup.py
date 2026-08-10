@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""消息去重：按消息 id 缓存，防网关重放事件导致重复处理。"""
 
 import time
 from collections import deque
@@ -7,7 +6,6 @@ from typing import Deque, Dict
 
 
 class MessageDedup:
-    """滑动窗口消息去重；is_duplicate 返回该 id 是否已在窗口内见过。"""
 
     def __init__(self, window: float = 60.0, max_items: int = 500):
         self.window = window

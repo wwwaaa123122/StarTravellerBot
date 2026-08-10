@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""统计与昵称记录：stats.json / nickname_map.json / 签到昵称回填。"""
 
 import json
 import os
@@ -11,7 +10,6 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class StatsTracker:
-    """消息/AI 调用统计与用户昵称记录（JSON 原子写入）。"""
 
     def __init__(self, data_dir: Optional[str] = None, logger=None):
         self.logger = logger
@@ -74,12 +72,10 @@ class StatsTracker:
             pass
 
     def record_nickname(self, user_id: str, nickname: str) -> None:
-        """记录用户昵称；已有签到记录的用户同时回填签到数据库。"""
         if not user_id or not nickname:
             return
         self.save_nickname(user_id, nickname)
 
-        # 兼容：已有签到记录的用户回填签到数据库
         if not os.path.exists(self.checkin_db):
             return
         try:
@@ -96,7 +92,6 @@ class StatsTracker:
             pass
 
     def save_nickname(self, user_id: str, nickname: str) -> None:
-        """把 openid -> 昵称 写入全局对照表（原子写入）。"""
         if not user_id or not nickname:
             return
         path = self.nickname_file

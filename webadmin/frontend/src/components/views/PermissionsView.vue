@@ -9,12 +9,10 @@ const perm = ref({ root_users: [], blacklist: [], allow_ai: true });
 const loading = ref(false);
 const saving = ref(false);
 
-// 编辑用的临时列表
 const rootUsers = ref([]);
 const blacklist = ref([]);
 const allowAi = ref(true);
 
-// 新增输入
 const newRootUser = ref("");
 const newBlacklist = ref("");
 

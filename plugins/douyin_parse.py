@@ -1,11 +1,3 @@
-"""抖音视频解析插件
-
-触发方式（群聊）：
-    抖音 <v.douyin.com短链 / douyin.com视频链接 / iesdouyin分享链接 / 纯视频ID>
-
-流程：还原短链 → 提取 aweme_id → 请求 iesdouyin 分享页（SSR 数据）→ 输出视频信息卡片图（Pillow 合成）。
-"""
-
 import json
 import logging
 import math
@@ -39,7 +31,6 @@ PATTERNS = [
 
 ROUTER_RE = re.compile(r"window\._ROUTER_DATA\s*=\s*(\{.*?\})\s*</script>", re.S)
 
-# ---- 字体 & 常量 ----
 FONT_PATH = "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"
 CARD_W, CARD_H = 720, 405
 PAD = 24
@@ -163,7 +154,6 @@ def _make_circle_mask(size: int) -> Image.Image:
 
 
 def _draw_icon(draw, x, y, icon_type, color, size):
-    """Draw a simple geometric icon using Pillow drawing primitives."""
     s = size
 
     if icon_type == "play":
@@ -231,7 +221,6 @@ def _generate_card(
     cover_bytes: bytes | None,
     aweme_id: str,
 ) -> BytesIO:
-    """用 Pillow 合成抖音视频信息卡片，返回 PNG BytesIO。"""
     img = Image.new("RGB", (CARD_W, CARD_H), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
@@ -249,7 +238,6 @@ def _generate_card(
     card_rect = [PAD, PAD, CARD_W - PAD, CARD_H - PAD]
     draw.rounded_rectangle(card_rect, radius=16, fill=CARD_BG, outline=BORDER_COLOR, width=1)
 
-    # ---- 标题（视频描述） ----
     title_x = PAD + 16
     title_y = PAD + 16
     max_title_w = CARD_W - PAD * 2 - 32
@@ -260,12 +248,10 @@ def _generate_card(
     div_y = title_y + len(title_lines) * 26 + 10
     draw.line([(title_x, div_y), (CARD_W - PAD - 16, div_y)], fill=BORDER_COLOR, width=1)
 
-    # ---- 左侧信息 ----
     info_x = PAD + 16
     info_y = div_y + 15
     row_gap = 24
 
-    # 行1: 头像 + 作者名
     avatar_size = 34
     if avatar_bytes:
         try:
@@ -287,12 +273,10 @@ def _generate_card(
     name_x = info_x + avatar_size + 12
     draw.text((name_x, info_y + 8), nickname, fill=VALUE_COLOR, font=font_label)
 
-    # 行2: 发布时间 + 时长
     row2_y = info_y + row_gap + 8
     time_text = f"发布时间: {pub_str}  |  时长: {duration}" if pub_str else f"时长: {duration}"
     draw.text((info_x, row2_y), time_text, fill=LABEL_COLOR, font=font_small)
 
-    # 行3: 播放 + 评论
     row3_y = row2_y + row_gap
     _draw_stat_row(
         draw, info_x, row3_y,
@@ -301,7 +285,6 @@ def _generate_card(
         font_label, font_value,
     )
 
-    # 行4: 点赞 + 收藏
     row4_y = row3_y + row_gap
     _draw_stat_row(
         draw, info_x, row4_y,
@@ -310,14 +293,12 @@ def _generate_card(
         font_label, font_value,
     )
 
-    # 行5: 分享
     row5_y = row4_y + row_gap
     _draw_icon(draw, info_x, row5_y + 1, "share", ACCENT_SHARE, ICON_SIZE)
     draw.text((info_x + ICON_SIZE + 4, row5_y), "分享", fill=LABEL_COLOR, font=font_label)
     lw = font_label.getlength("分享")
     draw.text((info_x + ICON_SIZE + 4 + lw + 6, row5_y), share_count, fill=ACCENT_SHARE, font=font_value)
 
-    # 视频链接
     link_y = row5_y + row_gap
     draw.text(
         (info_x, link_y),
@@ -326,7 +307,6 @@ def _generate_card(
         font=font_small,
     )
 
-    # ---- 右侧封面 ----
     if cover_bytes:
         try:
             cover = Image.open(BytesIO(cover_bytes)).convert("RGB")
@@ -361,7 +341,6 @@ async def on_message(ctx):
     order = kwargs.get("order", "") or ""
     raw = _extract_aweme_id(order)
     if not raw:
-        # 仅当用户主动发起命令时才回复帮助，其余消息静默略过
         if order.startswith("抖音"):
             await actions.send(content=f"无法识别抖音链接，用法：{HELP_MESSAGE}")
             return True
@@ -427,7 +406,6 @@ async def on_message(ctx):
     collect_count = _format_num(stats.get("collect_count"))
     share_count = _format_num(stats.get("share_count"))
 
-    # 作者头像
     avatar_thumb = author.get("avatar_thumb") or {}
     avatar_url = _pick_url(avatar_thumb.get("url_list"))
     if not avatar_url:
@@ -443,7 +421,6 @@ async def on_message(ctx):
     if cover_url.startswith("http://"):
         cover_url = "https://" + cover_url[7:]
 
-    # 下载封面和头像
     try:
         async with httpx.AsyncClient() as session:
             cover_bytes = await _download_image(session, cover_url) if cover_url else None
@@ -453,7 +430,6 @@ async def on_message(ctx):
         cover_bytes = None
         avatar_bytes = None
 
-    # 生成卡片图
     try:
         card_buf = _generate_card(
             desc=desc,

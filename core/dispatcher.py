@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""消息分发器：按场景配置统一处理单聊/群聊/频道消息流程。"""
 
 import re
 import traceback
@@ -12,7 +11,6 @@ from core.permissions import is_blacklisted
 
 @dataclass
 class Scene:
-    """场景配置：描述一种消息来源的处理规则。"""
     name: str
     log_prefix: str
     user_id_attr: str
@@ -28,13 +26,12 @@ class Scene:
     min_content_len: int = 1
     handle_status: bool = False
     handle_logout: bool = False
-    empty_action: str = "ignore"  # greet | group_hint | help | ignore
-    reminder_check_raw: bool = False  # 用剥离 @提及 前的原文判断 reminder 前缀（群全量场景）
-    reply_on_reminder_match: bool = False  # True=前缀命中才提示未找到；False=前缀未命中才提示
+    empty_action: str = "ignore"
+    reminder_check_raw: bool = False
+    reply_on_reminder_match: bool = False
 
 
 class Dispatcher:
-    """消息分发：去重 -> 黑名单 -> 昵称记录 -> 统计 -> 内置指令 -> 插件 -> AI。"""
 
     def __init__(self, client):
         self.client = client
@@ -49,7 +46,6 @@ class Dispatcher:
             user_id = str(getattr(author, scene.user_id_attr, "") or "")
             group_id = getattr(message, scene.group_attr, None)
 
-            # 网关重放去重（按场景+消息 id）
             message_id = getattr(message, "id", None)
             if message_id and self.dedup.is_duplicate(f"{scene.name}:{message_id}"):
                 client.logger.info(f"[去重] 忽略重复消息 {scene.name}/{message_id}")
@@ -60,7 +56,6 @@ class Dispatcher:
             if scene.strip_mentions_regex:
                 content = re.sub(r'<@!?\w+>', '', content).strip()
 
-            # 黑名单：静默忽略，不记录统计
             if user_id and is_blacklisted(user_id, client.config):
                 client.logger.info(f"[黑名单] 忽略 {user_id} 的消息")
                 return
@@ -112,7 +107,6 @@ class Dispatcher:
                     await client._send_message(message, f"未找到匹配的插件命令，发送 @机器人 /帮助 查看可用指令")
                 return
 
-            # ---- AI 场景 ----
             if scene.handle_logout and order in ("注销", f"{client.reminder}注销"):
                 client.context.user_lists.pop(user_id, None)
                 await client._send_message(message, "已清除你的对话上下文记忆")
@@ -180,7 +174,6 @@ class Dispatcher:
             pass
 
 
-# 单聊 (C2C_MESSAGE_CREATE)
 SCENE_C2C = Scene(
     name="单聊",
     log_prefix="单聊",
@@ -192,7 +185,6 @@ SCENE_C2C = Scene(
     empty_action="greet",
 )
 
-# 群聊@机器人 (GROUP_AT_MESSAGE_CREATE)
 SCENE_GROUP_AT = Scene(
     name="群聊",
     log_prefix="群聊",
@@ -203,7 +195,6 @@ SCENE_GROUP_AT = Scene(
     empty_action="group_hint",
 )
 
-# 群聊全量 (GROUP_MESSAGE_CREATE)
 SCENE_GROUP = Scene(
     name="群聊全量",
     log_prefix="群聊全量",
@@ -217,7 +208,6 @@ SCENE_GROUP = Scene(
     reply_on_reminder_match=True,
 )
 
-# 频道私信 (DIRECT_MESSAGE_CREATE)
 SCENE_DIRECT = Scene(
     name="频道私信",
     log_prefix="频道私信",
@@ -230,7 +220,6 @@ SCENE_DIRECT = Scene(
     empty_action="greet",
 )
 
-# 频道@机器人 (AT_MESSAGE_CREATE)
 SCENE_AT = Scene(
     name="频道",
     log_prefix="频道",

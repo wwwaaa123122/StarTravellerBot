@@ -32,17 +32,13 @@ StarTraveller 提供一个独立于机器人主进程的 Web 管理后台（`web
 
 ### 随机器人自动启动
 
-在 `config.json` 中配置 `webadmin` 段后，`main.py` 会以**守护线程**方式随机器人同步启动管理后台，不影响机器人事件循环：
+在 `.env` 中配置 `webadmin` 相关环境变量后，`main.py` 会以**守护线程**方式随机器人同步启动管理后台，不影响机器人事件循环：
 
-```json
-{
-  "webadmin": {
-    "enabled": true,
-    "host": "0.0.0.0",
-    "port": 8765,
-    "password": "你的强密码"
-  }
-}
+```env
+STAR_TRAVELLER_ADMIN_ENABLED=true
+STAR_TRAVELLER_ADMIN_HOST=0.0.0.0
+STAR_TRAVELLER_ADMIN_PORT=8765
+STAR_TRAVELLER_ADMIN_PASSWORD=你的强密码
 ```
 
 ### 独立启动
@@ -55,7 +51,7 @@ python -m webadmin.server --host 0.0.0.0 --port 8765
 
 1. 启动参数（`--host` / `--port` / `--password`）
 2. 环境变量 `STAR_TRAVELLER_ADMIN_HOST` / `_PORT` / `_PASSWORD`
-3. `config.json` 的 `webadmin` 段
+3. `.env` 的 `webadmin` 段（`STAR_TRAVELLER_ADMIN_*`）
 4. 内置默认值（`0.0.0.0:8765`，密码 `admin123`）
 
 > **安全提示**：默认监听 `0.0.0.0`（所有网卡），访问时不校验 Host 头端口，请务必设置强密码，避免使用默认密码 `admin123`。

@@ -7,9 +7,6 @@ from typing import List
 
 
 class RAGMemory:
-    """基于检索增强生成(RAG)的对话记忆系统
-    使用字符 bigram TF-IDF 进行中文语义检索
-    """
 
     def __init__(self, data_dir: str):
         self.data_dir = os.path.join(data_dir, "rag")
@@ -83,7 +80,6 @@ class RAGMemory:
             doc = e["q"] + e["a"]
             d_tokens = self._tokenize(doc)
             sim = self._calc_similarity(q_tokens, d_tokens, idf)
-            # 相关性 × 新鲜度权重
             recency = 1.0 + 0.15 * (i / max(1, n_docs - 1))
             scored.append((sim * recency, e))
 

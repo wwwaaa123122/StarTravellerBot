@@ -1,4 +1,3 @@
-/* 星辰旅人 Web 管理后台 */
 "use strict";
 
 const TOKEN_KEY = "webadmin_token";
@@ -6,7 +5,6 @@ const $ = (sel) => document.querySelector(sel);
 
 let state = { token: localStorage.getItem(TOKEN_KEY) || "" };
 
-/* ---------- 基础工具 ---------- */
 
 function toast(msg, isError = false) {
   const el = $("#toast");
@@ -39,7 +37,6 @@ function fmtNum(n) { return Number(n || 0).toLocaleString(); }
 
 function pct(n) { return (Number(n || 0) * 100).toFixed(1) + "%"; }
 
-/* ---------- 登录 ---------- */
 
 async function doLogin(e) {
   e.preventDefault();
@@ -78,7 +75,6 @@ function enterApp() {
   setInterval(refreshBotStatus, 15000);
 }
 
-/* ---------- 导航 ---------- */
 
 const TITLES = {
   overview: "总览", plugins: "插件管理", permissions: "权限管理",
@@ -109,7 +105,6 @@ async function loadTab(name) {
   }
 }
 
-/* ---------- 总览 ---------- */
 
 async function renderOverview() {
   const d = await api("/admin/api/overview");
@@ -151,7 +146,6 @@ function card(label, value, sub = "") {
     ${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
 }
 
-/* ---------- 插件 ---------- */
 
 async function renderPlugins() {
   const d = await api("/admin/api/plugins/toggle");
@@ -185,7 +179,6 @@ async function togglePlugin(name, enabled) {
   }
 }
 
-/* ---------- 权限 ---------- */
 
 async function renderPermissions() {
   const d = await api("/admin/api/permissions");
@@ -225,7 +218,6 @@ async function savePermissions() {
   }
 }
 
-/* ---------- AI 设置 ---------- */
 
 async function renderAi() {
   const d = await api("/admin/api/ai-settings");
@@ -264,7 +256,6 @@ async function saveAi() {
       ai_max_tokens: Number($("#ai-max").value),
       ai_temperature: Number($("#ai-temp").value),
     };
-    // 仅当用户输入了新值（非掩码）才提交 key
     for (const [id, key] of [["ai-ds", "deepseek_key"], ["ai-gemini", "gemini_key"], ["ai-openai", "openai_key"]]) {
       const v = $("#" + id).value.trim();
       if (v && !v.includes("***")) body[key] = v;
@@ -277,7 +268,6 @@ async function saveAi() {
   }
 }
 
-/* ---------- 用户 ---------- */
 
 async function renderUsers() {
   const d = await api("/admin/api/users");
@@ -296,7 +286,6 @@ async function renderUsers() {
     ${rows || '<tr><td colspan="7" class="empty">暂无签到用户</td></tr>'}</table></div>`;
 }
 
-/* ---------- 记忆 ---------- */
 
 async function renderMemory() {
   const d = await api("/admin/api/memory");
@@ -313,7 +302,6 @@ async function renderMemory() {
     ${rows || '<tr><td colspan="4" class="empty">暂无记忆</td></tr>'}</table></div>`;
 }
 
-/* ---------- 定时 ---------- */
 
 async function renderSchedule() {
   const d = await api("/admin/api/schedule");
@@ -328,7 +316,6 @@ async function renderSchedule() {
     <div class="table-wrap"><div style="padding:14px;white-space:pre-wrap;color:var(--muted)">${esc(d.content || "（未配置）")}</div></div>`;
 }
 
-/* ---------- 配置 ---------- */
 
 async function renderConfig() {
   const d = await api("/admin/api/config");
@@ -343,7 +330,6 @@ async function renderConfig() {
     <div class="table-wrap"><pre style="padding:14px;overflow-x:auto;font-size:12px;color:var(--muted)">${esc(JSON.stringify(d.config, null, 2))}</pre></div>`;
 }
 
-/* ---------- 状态 ---------- */
 
 async function refreshBotStatus() {
   try {
@@ -359,7 +345,6 @@ async function refreshBotStatus() {
   }
 }
 
-/* ---------- 初始化 ---------- */
 
 document.addEventListener("DOMContentLoaded", () => {
   $("#login-form").addEventListener("submit", doLogin);

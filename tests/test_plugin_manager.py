@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""PluginManager 测试：插件加载 / TRIGGER 拼写兼容 / Any 排序 / skip_plugins。"""
 
 import logging
 import types
@@ -24,7 +23,6 @@ async def on_message(event, actions, **kwargs):
     return True
 """
 
-# 旧拼写插件：验证向后兼容
 _LEGACY_PLUGIN = """\
 TRIGGHT_KEYWORD = "旧版"
 HELP_MESSAGE = "legacy-help"
@@ -33,7 +31,6 @@ async def on_message(event, actions, **kwargs):
     return True
 """
 
-# 新 API 插件：on_message(ctx)
 _NEW_API_PLUGIN = """\
 TRIGGER_KEYWORD = "新接口"
 HELP_MESSAGE = "new-api-help"
@@ -70,7 +67,6 @@ def test_load_plugins_with_trigger(tmp_path, manager):
     manager.load_plugins(plugin_dir=str(tmp_path))
     names = [p["name"] for p in manager.plugins]
     assert sorted(names) == ["any", "hitokoto", "ping"]
-    # Any 插件排在最后
     assert manager.plugins[-1]["name"] == "any"
 
 
@@ -99,7 +95,6 @@ def test_new_api_context_plugin(tmp_path, manager):
     msg = types.SimpleNamespace(author=types.SimpleNamespace(member_openid="u1", user_openid="u1"))
     loop = __import__("asyncio").get_event_loop_policy().new_event_loop()
     try:
-        # ctx.order == "新接口" 且 ctx.user_id == "u1"，插件返回 True
         assert loop.run_until_complete(manager.try_plugins(msg, "新接口")) is True
     finally:
         loop.close()

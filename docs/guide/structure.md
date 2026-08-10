@@ -11,9 +11,9 @@ next:
 
 ```
 StarTravellerBot/
-├── main.py                  # 入口：加载 .env + config.json，创建 XCLRClient
+├── main.py                  # 入口：加载 .env，创建 XCLRClient
 ├── client.py                # XCLRClient(qqbot_openapi.Client)：事件入口 + AI 调度（<300 行）
-├── config.json              # 配置文件（AI 密钥、机器人名称、webadmin 等）
+├── .env.example             # 配置模板（复制为 .env 并填写）
 ├── config/                  # 配置系统：defaults + loader（.env/环境变量优先）+ schema（类型化访问）
 ├── pyproject.toml          # 本地包 qqbot-openapi 元数据 + 核心依赖 + ruff/mypy 配置
 ├── requirements.txt        # 插件额外依赖（python-whois 等）
@@ -75,12 +75,12 @@ StarTravellerBot/
 
 | 文件 | 职责 |
 | :--- | :--- |
-| `main.py` | 入口点，加载 `.env` + `config.json`，初始化 `XCLRClient`，调用 `client.run()` |
+| `main.py` | 入口点，加载 `.env`，初始化 `XCLRClient`，调用 `client.run()` |
 | `client.py` | 继承 `qqbot_openapi.Client`，事件入口，委托给 Dispatcher/PluginManager/AIChat |
 | `core/dispatcher.py` | 场景配置驱动的消息分发（单聊/群聊/频道），内置指令 + 插件 + AI 路由 |
 | `core/plugin_manager.py` | 插件扫描/注册/匹配/执行，兼容旧版 kwargs 注入 API |
 | `core/messenger.py` | 统一消息发送（自动识别群聊/单聊、Markdown 探测） |
-| `config/loader.py` | 配置合并：环境变量 > .env > config.json > 默认值 |
+| `config/loader.py` | 配置合并：环境变量 > .env > 默认值 |
 | `ai/chat.py` | AI 对话核心，OpenAI 兼容接口（DeepSeek/Gemini 双模型） |
 | `Tools/scheduler.py` | 全局 APScheduler 单例，`set_client()` 注入客户端引用 |
 

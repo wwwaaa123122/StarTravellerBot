@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""网关事件分发测试：验证旧版 botpy 事件名 → 回调 + 模型映射"""
 
 import asyncio
 
@@ -28,7 +27,6 @@ from qqbot_openapi.connection import ConnectionState, _EVENT_HANDLERS
 
 
 def _run_state(state, payload):
-    """在独立事件循环中完成 parse_message + 等待回调任务，避免跨循环调度"""
     loop = asyncio.new_event_loop()
     try:
         loop.run_until_complete(state.parse_message(payload))
@@ -68,7 +66,6 @@ def _dispatch(event_name: str, data: dict):
     return client
 
 
-# 事件名 → (模型类, 回调名, 样例数据)
 _EVENT_CASES = [
     ("C2C_MESSAGE_CREATE", GroupMessage, "on_c2c_message_create",
      {"id": "m1", "group_openid": "g1", "author": {"user_openid": "u1"}}),
@@ -169,7 +166,7 @@ def test_dispatch_unknown_event_is_noop():
 
 def test_dispatch_missing_callback_is_noop():
     class NoAudioClient(FakeClient):
-        on_audio_start = None  # 遮蔽回调，等价于未定义
+        on_audio_start = None
 
     client = NoAudioClient()
     state = ConnectionState(client)
@@ -208,7 +205,6 @@ def test_dispatch_error_is_caught_and_logged():
 
 
 def test_event_handler_map_is_complete():
-    """所有旧版 botpy 事件回调均已在映射中"""
     expected = {
         "on_ready", "on_at_message_create", "on_public_message_delete",
         "on_message_create", "on_message_delete", "on_direct_message_create",

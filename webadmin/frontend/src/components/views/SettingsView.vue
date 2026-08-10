@@ -28,7 +28,7 @@ const bot = computed(() => st.value.bot || {});
 const configEntries = computed(() => Object.entries(cfg.value.config || {}));
 
 const cards = computed(() => [
-  { label: "机器人名称", value: bi.value.name || "-", sub: "来自 config.json", dot: "success" },
+  { label: "机器人名称", value: bi.value.name || "-", sub: "来自 .env", dot: "success" },
   { label: "运行状态", value: bot.value.running ? "运行中" : "未运行", sub: "PID " + (bot.value.pid || "-"), dot: bot.value.running ? "success" : "off" },
   { label: "沙箱模式", value: bi.value.sandbox ? "是" : "否", sub: "is_sandbox", dot: "success" },
 ]);
@@ -77,7 +77,7 @@ function fmtValue(v) {
             <span class="detail-val mono">{{ esc(fmtValue(v)) }}</span>
           </div>
           <div v-if="configEntries.length === 0" class="detail-item full">
-            <span class="detail-val">config.json 为空或未找到</span>
+            <span class="detail-val">.env 为空或未找到</span>
           </div>
         </div>
       </div>

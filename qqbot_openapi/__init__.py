@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""qqbot_openapi：QQ 开放平台机器人 SDK
-
-基于官方文档实现的轻量封装，覆盖：
-- 访问凭证管理（AppAccessToken 自动刷新）
-- REST API（群聊/C2C 消息、文件、撤回）
-- WebSocket 网关（心跳、Resume 重连、事件分发）
-"""
 
 __version__ = "0.1.0.dev3"
 

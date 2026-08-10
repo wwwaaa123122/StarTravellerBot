@@ -1,8 +1,5 @@
 import { defineConfig } from 'vitepress'
 
-// VitePress 2.0.0-alpha.18 配置文件
-// 必须放在 .vitepress/ 目录下（VitePress 硬编码路径）
-// 源 Markdown 文件在 docs/ 目录（由 srcDir 指定）
 
 export default defineConfig({
   base: '/',

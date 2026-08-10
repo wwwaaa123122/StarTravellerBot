@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
-"""消息/事件数据模型
-
-与官方文档事件体字段一一对应。模型为"字典兜底"式：顶层字段直接作为属性
-访问，嵌套 dict 自动包装为 :class:`Model`，因此可以透明访问任意官方字段
-（如 ``message.author.user_openid``、``message.group_openid``）。
-
-字段访问语义：
-- 已知字段（事件数据中存在的 key）缺失时返回 ``None``；
-- 未知字段（拼写错误或未声明）抛 ``AttributeError``，避免静默吞掉 typo；
-- 需要宽松取值时请显式使用 :meth:`Model.get`。
-"""
 
 from typing import Any, List, Optional, Union
 
 
 def _wrap(value: Any) -> Any:
-    """递归包装 dict 与 list，使嵌套字段也支持属性访问"""
     if isinstance(value, dict):
         return Model(value)
     if isinstance(value, list):
@@ -24,7 +12,6 @@ def _wrap(value: Any) -> Any:
 
 
 def _unwrap(value: Any) -> Any:
-    """递归还原为普通 dict/list"""
     if isinstance(value, Model):
         return value.to_dict()
     if isinstance(value, list):
@@ -33,7 +20,6 @@ def _unwrap(value: Any) -> Any:
 
 
 class Model:
-    """通用数据模型：由事件/响应字典构造，字段即属性"""
 
     __slots__ = ("_data", "_api")
 
@@ -42,12 +28,9 @@ class Model:
         object.__setattr__(self, "_api", api)
 
     def _set_api(self, api: Any) -> None:
-        """注入 API 客户端引用，使消息对象具备 reply() 能力"""
         object.__setattr__(self, "_api", api)
 
     def __getattr__(self, name: str) -> Any:
-        # 未知字段（拼写错误等）抛 AttributeError 及早暴露；已知字段缺失返回 None。
-        # 宽松取值请用 self.get(name, default)。
         if name not in self._data:
             raise AttributeError(
                 f"{type(self).__name__!r} object has no field {name!r}"
@@ -78,10 +61,6 @@ class Model:
         markdown: Optional[Union[str, dict]] = None,
         **kwargs: Any,
     ) -> dict:
-        """回复当前消息，按消息场景自动分发：
-        群聊（group_openid）→ 群聊 API；频道/私信（channel_id）→ 频道 API；
-        C2C（author.user_openid）→ 单聊 API。markdown 非空时 msg_type 置为 2。
-        """
         api = self._api
         if api is None:
             raise RuntimeError("消息对象未绑定 API 引用，无法调用 reply()")
@@ -127,114 +106,73 @@ class Model:
 
 
 class Message(Model):
-    """频道消息（AT_MESSAGE_CREATE / 公域频道消息）"""
+    pass
 
 
 class GroupMessage(Model):
-    """群聊 / C2C 单聊消息
-
-    群聊消息带 ``group_openid``；C2C 消息带 ``author.user_openid``。
-    事件体字段：id、author、content、timestamp、group_openid、message_type、
-    message_scene、attachments、mentions、ark_data、msg_elements 等。
-    """
+    pass
 
 
 class DirectMessage(Model):
-    """频道私信（DIRECT_MESSAGE_CREATE）"""
+    pass
 
 
 class Group(Model):
-    """群事件载体（GROUP_ADD_ROBOT / GROUP_DEL_ROBOT / GROUP_MSG_REJECT /
-    GROUP_MSG_RECEIVE），字段：group_openid、op_member_openid、timestamp、scene"""
+    pass
 
 
 class FriendUser(Model):
-    """好友事件载体（FRIEND_ADD / FRIEND_DEL），字段：openid、timestamp、
-    scene、scene_param、author"""
+    pass
 
 
 class Ready(Model):
-    """READY 事件：version、session_id、user、shard"""
+    pass
 
 
 class Guild(Model):
-    """频道对象（GUILD_CREATE / GUILD_UPDATE / GUILD_DELETE）
-
-    字段：id、name、icon、owner_id、member_count、max_members、description、
-    joined_at、channels 等。
-    """
+    pass
 
 
 class Channel(Model):
-    """子频道对象（CHANNEL_CREATE / CHANNEL_UPDATE / CHANNEL_DELETE）
-
-    字段：id、guild_id、name、type、parent_id、position、sub_type、
-    permissions、owner_id、private_type 等。
-    """
+    pass
 
 
 class GuildMember(Model):
-    """频道成员对象（GUILD_MEMBER_ADD / GUILD_MEMBER_UPDATE / GUILD_MEMBER_REMOVE）
-
-    字段：user、nick、roles、joined_at、deaf、mute、pending、guild_id、
-    op_user_id、group_openid 等。
-    """
+    pass
 
 
 class Reaction(Model):
-    """表情表态对象（MESSAGE_REACTION_ADD / MESSAGE_REACTION_REMOVE）
-
-    字段：user_id、channel_id、guild_id、target、emoji、group_openid 等。
-    """
+    pass
 
 
 class Interaction(Model):
-    """互动事件对象（INTERACTION_CREATE）
-
-    字段：id、type、application_id、channel_id、guild_id、data、version、
-    group_openid 等。
-    """
+    pass
 
 
 class MessageAudit(Model):
-    """消息审核事件（MESSAGE_AUDIT_PASS / MESSAGE_AUDIT_REJECT）
-
-    字段：audit_id、message_id、guild_id、channel_id、audit_time、
-    create_time、seq_in_channel、group_openid 等。
-    """
+    pass
 
 
 class Thread(Model):
-    """论坛主题对象（FORUM_THREAD_CREATE / FORUM_THREAD_UPDATE /
-    FORUM_THREAD_DELETE），字段：guild_id、channel_id、author_id、thread_info"""
+    pass
 
 
 class Post(Model):
-    """论坛帖子对象（FORUM_POST_CREATE / FORUM_POST_DELETE）
-
-    字段：guild_id、channel_id、author_id、post_info"""
+    pass
 
 
 class Reply(Model):
-    """论坛评论对象（FORUM_REPLY_CREATE / FORUM_REPLY_DELETE）
-
-    字段：guild_id、channel_id、author_id、reply_info"""
+    pass
 
 
 class AuditResult(Model):
-    """论坛发表审核结果（FORUM_PUBLISH_AUDIT_RESULT）
-
-    字段：guild_id、channel_id、author_id、audit_result"""
+    pass
 
 
 class Audio(Model):
-    """音频对象（AUDIO_START / AUDIO_FINISH / AUDIO_ON_MIC / AUDIO_OFF_MIC）
-
-    字段：channel_id、guild_id、audio_url、status、text、user_id、
-    sec_member、member"""
+    pass
 
 
-# 类型别名，兼容 botpy 风格导入
 User = Model
 Author = Model
 Member = GuildMember

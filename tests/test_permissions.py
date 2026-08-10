@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""权限判定测试：黑名单 / ROOT_User。"""
 
 from core.permissions import is_blacklisted, is_root
 

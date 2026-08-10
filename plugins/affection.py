@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""好感度查询插件 - 适配 QQ 开放平台"""
 
 import os
 import logging
@@ -11,10 +10,8 @@ _logger = logging.getLogger("affection")
 TRIGGER_KEYWORD = "好感度"
 HELP_MESSAGE = "好感度 -> 查询好感度信息"
 
-# 数据库路径
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "checkin.db")
 
-# 好感度等级
 AFFECTION_LEVELS = [
     (0, "冷漠"),
     (10, "陌生"),
@@ -28,7 +25,6 @@ AFFECTION_LEVELS = [
 
 
 async def _load_data(user_id: str) -> dict:
-    """加载用户签到数据（从 SQLite）"""
     if not os.path.exists(DB_PATH):
         return {"points": 0, "affection": 0, "last_checkin": None, "streak": 0}
     async with aiosqlite.connect(DB_PATH) as db:
@@ -46,7 +42,6 @@ async def _load_data(user_id: str) -> dict:
 
 
 def _get_affection_level(affection: int) -> str:
-    """获取好感度等级"""
     level = "冷漠"
     for threshold, name in AFFECTION_LEVELS:
         if affection >= threshold:
@@ -55,8 +50,6 @@ def _get_affection_level(affection: int) -> str:
 
 
 def _get_affection_bar(affection: int) -> str:
-    """获取好感度进度条"""
-    # 找到当前等级和下一等级
     current_level = AFFECTION_LEVELS[0]
     next_level = AFFECTION_LEVELS[1]
     
@@ -68,13 +61,11 @@ def _get_affection_bar(affection: int) -> str:
             else:
                 next_level = (threshold + 100, "MAX")
     
-    # 计算进度
     current_threshold = current_level[0]
     next_threshold = next_level[0]
     progress = (affection - current_threshold) / (next_threshold - current_threshold) if next_threshold > current_threshold else 1
     progress = min(progress, 1.0)
     
-    # 生成进度条
     bar_length = 10
     filled = int(progress * bar_length)
     bar = "█" * filled + "░" * (bar_length - filled)
@@ -83,20 +74,16 @@ def _get_affection_bar(affection: int) -> str:
 
 
 async def on_message(ctx):
-    """查询好感度"""
     event = ctx.event
     actions = ctx.actions
     kwargs = ctx.kwargs
     user_id = event.user_id
     
-    # 加载用户数据
     data = await _load_data(user_id)
     
-    # 获取好感度等级和进度条
     affection_level = _get_affection_level(data["affection"])
     affection_bar = _get_affection_bar(data["affection"])
     
-    # 计算下一等级所需好感度
     next_threshold = None
     for threshold, name in AFFECTION_LEVELS:
         if data["affection"] < threshold:

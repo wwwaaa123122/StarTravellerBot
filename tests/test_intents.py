@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Intents 订阅测试：构造参数 / 属性式 / 快捷订阅 / 未知 intent"""
 
 import pytest
 
 from qqbot_openapi import Intents
 
-PGM = 1 << 30  # public_guild_messages
-GM = 1 << 9    # guild_messages
-DM = 1 << 12   # direct_message
+PGM = 1 << 30
+GM = 1 << 9
+DM = 1 << 12
 GUILDS = 1 << 0
 MEMBERS = 1 << 1
 FORUMS = 1 << 28

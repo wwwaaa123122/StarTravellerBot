@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""AI Provider 测试：OpenAI 兼容 provider 的请求构造与响应解析。"""
 
 import json
 import logging

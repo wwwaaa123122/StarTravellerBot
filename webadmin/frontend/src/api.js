@@ -1,6 +1,5 @@
 import { store, logout } from "./store";
 
-/** 统一 API 请求：自动携带 token，401 时登出 */
 export async function api(path, opts = {}) {
   const headers = Object.assign({}, opts.headers || {});
   if (store.token) headers["Authorization"] = "Bearer " + store.token;
@@ -12,13 +11,12 @@ export async function api(path, opts = {}) {
   }
   if (!res.ok) {
     let msg = "请求失败 (" + res.status + ")";
-    try { msg = (await res.json()).error || msg; } catch (e) { /* ignore */ }
+    try { msg = (await res.json()).error || msg; } catch (e) { }
     throw new Error(msg);
   }
   return res.json();
 }
 
-/** 登录 */
 export async function doLogin(password) {
   const res = await fetch("/admin/api/login", {
     method: "POST",
@@ -30,7 +28,6 @@ export async function doLogin(password) {
   return j.token;
 }
 
-/* ---------- 格式化工具 ---------- */
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",

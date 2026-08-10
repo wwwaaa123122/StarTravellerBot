@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""Ping 插件 - 适配 QQ 开放平台"""
 
 import asyncio
 import json
@@ -13,7 +12,6 @@ HELP_MESSAGE = "ping <域名或IP> -> 对目标执行ping并返回IP信息"
 
 
 async def _run_ping(host: str) -> str:
-    """执行 ping 命令"""
     try:
         proc = await asyncio.create_subprocess_exec(
             "ping", "-c", "4", "-W", "2", host,
@@ -27,7 +25,6 @@ async def _run_ping(host: str) -> str:
 
 
 def _extract_latencies_ms(ping_text: str):
-    """提取延迟值"""
     times = []
     for m in re.finditer(r"time[=<]?\s*=?\s*([\d\.]+)\s*ms", ping_text):
         try:
@@ -38,7 +35,6 @@ def _extract_latencies_ms(ping_text: str):
 
 
 def _resolve_ip(host: str) -> str:
-    """解析 IP"""
     try:
         socket.inet_pton(socket.AF_INET, host)
         return host
@@ -56,7 +52,6 @@ def _resolve_ip(host: str) -> str:
 
 
 async def _fetch_geo(ip: str) -> dict:
-    """获取 IP 地理位置"""
     try:
         import httpx
         async with httpx.AsyncClient(timeout=8.0) as client:
@@ -70,13 +65,11 @@ async def _fetch_geo(ip: str) -> dict:
 
 
 async def on_message(ctx):
-    """处理 ping 命令"""
     event = ctx.event
     actions = ctx.actions
     kwargs = ctx.kwargs
     content = event.message if hasattr(event, 'message') else ""
     
-    # 提取目标
     if content.startswith("ping "):
         target = content[5:].strip()
     else:
@@ -92,7 +85,6 @@ async def on_message(ctx):
         await actions.send(content=f"目标: {target}\nDNS 解析失败: {e}")
         return True
     
-    # 并行执行 ping 和地理位置查询
     ping_task = asyncio.create_task(_run_ping(ip))
     geo_task = asyncio.create_task(_fetch_geo(ip))
     ping_text, geo = await asyncio.gather(ping_task, geo_task)
@@ -106,7 +98,6 @@ async def on_message(ctx):
         avg = None
         times_line = "未解析到延迟值"
     
-    # 地理位置信息
     if "error" in geo:
         geo_text = f"地理位置: {geo['error']}"
     else:
@@ -118,7 +109,6 @@ async def on_message(ctx):
             parts.append(f"ISP: {geo['isp']}")
         geo_text = "\n".join(parts) if parts else "地理位置: 未知"
     
-    # 格式化地理位置文本（如果有多行则用缩进）
     if "错误" in geo_text or "未知" in geo_text:
         geo_formatted = f"- {geo_text}"
     else:

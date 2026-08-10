@@ -1,12 +1,4 @@
 # -*- coding: utf-8 -*-
-"""WebSocket 网关连接与事件分发
-
-实现 QQ 开放平台网关协议：
-- 连接后等待 Hello（op10），按 heartbeat_interval 定时心跳（op1）
-- Identify（op2）/ Resume（op6）鉴权
-- Dispatch（op0）事件解析并分发到 Client 的 ``on_xxx`` 回调
-- 根据网关关闭码决定 Resume 重连 / 重新 Identify / 停止
-"""
 
 import asyncio
 import inspect
@@ -41,7 +33,6 @@ from .message import (
 
 _log = qq_logging.get_logger(__name__)
 
-# OpCode
 OP_DISPATCH = 0
 OP_HEARTBEAT = 1
 OP_IDENTIFY = 2
@@ -51,7 +42,6 @@ OP_INVALID_SESSION = 9
 OP_HELLO = 10
 OP_HEARTBEAT_ACK = 11
 
-# 网关关闭码（WebSocket close code）
 INVALID_OPCODE = 4001
 INVALID_PAYLOAD = 4002
 NOT_AUTHENTICATED = 4003
@@ -64,10 +54,9 @@ SESSION_TIMEOUT = 4009
 INVALID_SHARD = 4010
 INVALID_INTENT = 4013
 INTENT_NO_PERMISSION = 4014
-BOT_DISABLED = 4914  # 机器人已下架（仅沙箱）
-BOT_BANNED = 4915    # 机器人已封禁
+BOT_DISABLED = 4914
+BOT_BANNED = 4915
 
-# 不可自动恢复的致命关闭码
 _FATAL_CODES = frozenset(
     {
         NOT_AUTHENTICATED,
@@ -81,14 +70,8 @@ _FATAL_CODES = frozenset(
     }
 )
 
-# 事件名 → (Client 回调方法名, 模型类)
-#
-# 覆盖旧版 botpy 的事件回调（官方文档确认仍可使用），事件名与
-# 开放平台网关 Dispatch 的 ``t`` 字段一一对应。
 _EVENT_HANDLERS: Dict[str, tuple] = {
-    # 网关就绪
     "READY": ("on_ready", Ready),
-    # 群聊 / C2C 单聊 / 好友（1 << 25）
     "C2C_MESSAGE_CREATE": ("on_c2c_message_create", GroupMessage),
     "GROUP_AT_MESSAGE_CREATE": ("on_group_at_message_create", GroupMessage),
     "GROUP_MESSAGE_CREATE": ("on_group_message_create", GroupMessage),
@@ -98,34 +81,26 @@ _EVENT_HANDLERS: Dict[str, tuple] = {
     "GROUP_MSG_RECEIVE": ("on_group_msg_receive", Group),
     "FRIEND_ADD": ("on_friend_add", FriendUser),
     "FRIEND_DEL": ("on_friend_del", FriendUser),
-    # 频道消息（guild_messages / public_guild_messages）
     "AT_MESSAGE_CREATE": ("on_at_message_create", Message),
     "PUBLIC_MESSAGE_DELETE": ("on_public_message_delete", Message),
     "MESSAGE_CREATE": ("on_message_create", Message),
     "MESSAGE_DELETE": ("on_message_delete", Message),
-    # 频道私信（direct_message）
     "DIRECT_MESSAGE_CREATE": ("on_direct_message_create", DirectMessage),
     "DIRECT_MESSAGE_DELETE": ("on_direct_message_delete", DirectMessage),
-    # 消息表态（guild_message_reactions）
     "MESSAGE_REACTION_ADD": ("on_message_reaction_add", Reaction),
     "MESSAGE_REACTION_REMOVE": ("on_message_reaction_remove", Reaction),
-    # 频道 / 子频道（guilds）
     "GUILD_CREATE": ("on_guild_create", Guild),
     "GUILD_UPDATE": ("on_guild_update", Guild),
     "GUILD_DELETE": ("on_guild_delete", Guild),
     "CHANNEL_CREATE": ("on_channel_create", Channel),
     "CHANNEL_UPDATE": ("on_channel_update", Channel),
     "CHANNEL_DELETE": ("on_channel_delete", Channel),
-    # 频道成员（guild_members）
     "GUILD_MEMBER_ADD": ("on_guild_member_add", GuildMember),
     "GUILD_MEMBER_UPDATE": ("on_guild_member_update", GuildMember),
     "GUILD_MEMBER_REMOVE": ("on_guild_member_remove", GuildMember),
-    # 互动（interaction）
     "INTERACTION_CREATE": ("on_interaction_create", Interaction),
-    # 消息审核（message_audit）
     "MESSAGE_AUDIT_PASS": ("on_message_audit_pass", MessageAudit),
     "MESSAGE_AUDIT_REJECT": ("on_message_audit_reject", MessageAudit),
-    # 论坛（forums）
     "FORUM_THREAD_CREATE": ("on_forum_thread_create", Thread),
     "FORUM_THREAD_UPDATE": ("on_forum_thread_update", Thread),
     "FORUM_THREAD_DELETE": ("on_forum_thread_delete", Thread),
@@ -134,7 +109,6 @@ _EVENT_HANDLERS: Dict[str, tuple] = {
     "FORUM_REPLY_CREATE": ("on_forum_reply_create", Reply),
     "FORUM_REPLY_DELETE": ("on_forum_reply_delete", Reply),
     "FORUM_PUBLISH_AUDIT_RESULT": ("on_forum_publish_audit_result", AuditResult),
-    # 音频（audio_action）
     "AUDIO_START": ("on_audio_start", Audio),
     "AUDIO_FINISH": ("on_audio_finish", Audio),
     "AUDIO_ON_MIC": ("on_audio_on_mic", Audio),
@@ -143,14 +117,12 @@ _EVENT_HANDLERS: Dict[str, tuple] = {
 
 
 class ConnectionState:
-    """维护网关连接状态并负责事件分发"""
 
     def __init__(self, client: Any):
         self._client = client
         self.session_id: Optional[str] = None
         self.seq: Optional[int] = None
         self._tasks: set = set()
-        # 回调签名缓存：key 为函数对象（__func__），避免 bound method 每次访问重建导致缓存失效
         self._accepts_event_cache: Dict[Any, bool] = {}
 
     @property
@@ -158,7 +130,6 @@ class ConnectionState:
         return self._client
 
     async def parse_message(self, payload: Dict[str, Any]) -> None:
-        """解析 Dispatch 事件体并分发"""
         seq = payload.get("s")
         if seq is not None:
             self.seq = seq
@@ -188,11 +159,6 @@ class ConnectionState:
         task.add_done_callback(self._tasks.discard)
 
     def _accepts_event(self, callback: Any) -> bool:
-        """回调是否接受一个事件参数（结果缓存，避免每次事件都反射）。
-
-        key 取 __func__ 使 bound method 能命中缓存；用 signature.bind() 判断
-        而非仅看参数个数，可正确处理 *args、默认参数等签名。
-        """
         key = getattr(callback, "__func__", callback)
         cached = self._accepts_event_cache.get(key)
         if cached is not None:
@@ -208,7 +174,6 @@ class ConnectionState:
 
     async def _dispatch(self, callback: Any, event: Any) -> None:
         try:
-            # 兼容无参回调（botpy 风格 on_ready()）与带参回调 on_xxx(event)
             if self._accepts_event(callback):
                 await callback(event)
             else:
@@ -220,7 +185,6 @@ class ConnectionState:
 
 
 class GatewayClient:
-    """WebSocket 网关客户端"""
 
     def __init__(
         self,
@@ -240,11 +204,7 @@ class GatewayClient:
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._closed = False
 
-    # ------------------------------------------------------------------
-    # 对外入口
-    # ------------------------------------------------------------------
     async def run(self) -> None:
-        """持续运行网关连接，异常断开时自动重连（致命错误抛出）"""
         attempt = 0
         while not self._closed:
             try:
@@ -273,11 +233,7 @@ class GatewayClient:
     def stop(self) -> None:
         self._closed = True
 
-    # ------------------------------------------------------------------
-    # 单次连接生命周期
-    # ------------------------------------------------------------------
     async def _connect_once(self) -> Optional[int]:
-        """建立连接并监听，返回导致断开的 close code"""
         async with aiohttp.ClientSession() as session:
             ws = await self._handshake(session)
             try:
@@ -287,7 +243,6 @@ class GatewayClient:
             return ws.close_code
 
     async def _handshake(self, session: aiohttp.ClientSession) -> aiohttp.ClientWebSocketResponse:
-        """建立 WS 连接、等待 Hello、完成 Identify/Resume"""
         token = await self._token_manager.get_access_token()
         headers = {"Authorization": f"QQBot {token}"}
         ws = await session.ws_connect(
@@ -296,7 +251,6 @@ class GatewayClient:
             heartbeat=30,
             max_msg_size=64 * 1024 * 1024,
         )
-        # 等待 Hello
         msg = await asyncio.wait_for(ws.receive(), timeout=15)
         payload = json.loads(msg.data)
         if payload.get("op") != OP_HELLO:
@@ -342,9 +296,6 @@ class GatewayClient:
         await ws.send_str(json.dumps(payload))
         _log.info("已发送 Resume（session_id=%s seq=%s）", self._state.session_id, self._state.seq)
 
-    # ------------------------------------------------------------------
-    # 监听循环
-    # ------------------------------------------------------------------
     async def _listen(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         self._last_ack = time.monotonic()
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop(ws))
@@ -376,7 +327,6 @@ class GatewayClient:
         if op == OP_DISPATCH:
             await self._state.parse_message(payload)
         elif op == OP_HEARTBEAT:
-            # 服务端请求心跳
             await self._send_heartbeat(ws)
         elif op == OP_HEARTBEAT_ACK:
             self._last_ack = time.monotonic()
@@ -393,16 +343,12 @@ class GatewayClient:
         await ws.send_str(json.dumps(payload))
         _log.debug("发送心跳 seq=%s", self._state.seq)
 
-    # ------------------------------------------------------------------
-    # 心跳循环
-    # ------------------------------------------------------------------
     async def _heartbeat_loop(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         interval = self._heartbeat_interval or 40.0
         while True:
             await asyncio.sleep(interval)
             if ws.closed:
                 return
-            # 心跳超时（两个周期未收到 ACK）则主动断开触发重连
             if time.monotonic() - self._last_ack > interval * 2 + 5:
                 _log.warning("心跳 ACK 超时，主动断开连接")
                 await ws.close(code=1000)

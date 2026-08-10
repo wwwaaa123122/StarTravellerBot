@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""Dispatcher 测试：场景路由（ping / 插件 / AI / 空消息）。"""
 
 import logging
 import types
@@ -144,7 +143,6 @@ async def test_group_full_message_skips_affection():
 
 @pytest.mark.asyncio
 async def test_group_full_reminder_uses_raw_content():
-    """群全量场景：reminder 前缀按剥离 @提及 前的原文判断（<@bot> 在前时不算）"""
     sent = []
 
     async def try_plugins(message, order, skip_plugins=None):

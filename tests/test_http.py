@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""HTTPClient / Route 测试：路径模板、鉴权头、401 刷新重试、错误映射"""
 
 import json
 from types import SimpleNamespace

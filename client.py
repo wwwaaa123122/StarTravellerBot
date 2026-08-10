@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-QQ 开放平台机器人客户端：消息分发 + AI 调用 + 插件调度。
-场景流程见 core/dispatcher.py，插件系统见 core/plugin_manager.py。
-"""
 
 import os
 import sys
@@ -32,24 +28,14 @@ from core.dispatcher import Dispatcher, SCENE_C2C, SCENE_GROUP_AT, SCENE_GROUP, 
 
 
 class XCLRClient(QQClient):
-    """
-    星辰旅人 QQ 开放平台机器人客户端
-
-    支持的场景:
-    1. QQ 单聊 (C2C_MESSAGE_CREATE)
-    2. QQ 群聊@机器人 (GROUP_AT_MESSAGE_CREATE)
-    3. 频道私信 (DIRECT_MESSAGE_CREATE)
-    4. 频道@机器人 (AT_MESSAGE_CREATE)
-    """
 
     def __init__(self, config: Dict[str, Any], **kwargs):
-        """初始化机器人客户端。"""
         intents = Intents(
-            public_guild_messages=True,  # 频道公域消息 (AT_MESSAGE_CREATE)
-            public_messages=True,        # 群/C2C公域消息 (GROUP_AT_MESSAGE_CREATE, C2C_MESSAGE_CREATE)
-            direct_message=True,         # 频道私信
-            guilds=True,                 # 频道事件
-            guild_members=True,          # 频道成员事件
+            public_guild_messages=True,
+            public_messages=True,
+            direct_message=True,
+            guilds=True,
+            guild_members=True,
         )
         super().__init__(intents=intents, **kwargs)
 
@@ -113,7 +99,6 @@ class XCLRClient(QQClient):
         asyncio.create_task(self._watch_plugin_reload())
 
     async def _watch_plugin_reload(self):
-        """监听 data/reload.flag（webadmin 写入），触发插件热重载。"""
         flag = os.path.join(PROJECT_ROOT, "data", "reload.flag")
         while True:
             await asyncio.sleep(10)
@@ -131,7 +116,6 @@ class XCLRClient(QQClient):
                     pass
 
     async def _start_scheduler(self):
-        """启动 APScheduler 调度器，注入客户端引用。"""
         scheduler = get_scheduler()
         set_client(self)
         scheduler.start()
@@ -166,7 +150,6 @@ class XCLRClient(QQClient):
             await self._send_message(message, status)
 
     async def _handle_roleplay_command(self, message, content) -> bool:
-        """处理角色扮演命令（集成到主程序而非插件系统）"""
         if not content.startswith("角色"):
             return False
 
@@ -175,7 +158,6 @@ class XCLRClient(QQClient):
         return await roleplay_on_message(ctx)
 
     async def _handle_ai_chat(self, message, order, user_id, user_name, use_markdown=False):
-        """统一的 AI 对话处理（支持 Function Calling）"""
         async def execute_tool(tool_name, arguments):
             from ai.function_calling import execute_tool
             return await execute_tool(tool_name, arguments, user_id,
@@ -199,7 +181,6 @@ class XCLRClient(QQClient):
             await self._send_message(message, f"AI 服务异常，请稍后再试\n联系管理员: {CONTACT_URL}")
 
     async def _try_send_tts(self, message, text: str):
-        """尝试为 AI 回复生成并发送语音"""
         try:
             from plugins.tts import sanitize_for_tts, _generate_tts
             import gc
@@ -223,19 +204,10 @@ class XCLRClient(QQClient):
             self.logger.error(f"AI 语音生成失败: {e}")
 
     async def on_c2c_message_create(self, message: Any):
-        """处理 QQ 单聊消息 (C2C_MESSAGE_CREATE)"""
         self.logger.info(f"[EVENT] on_c2c_message_create triggered")
         await self.dispatcher.route(message, SCENE_C2C)
 
     def _try_get_nickname(self, message) -> str:
-        """从事件 author 提取昵称。
-
-        按官方文档 User 对象字段，昵称字段为 ``username``（用户昵称）。
-        群聊/单聊事件体均携带 ``author`` 对象：群聊用 member_openid、
-        单聊用 user_openid 标识用户，两者都带 username。保留
-        member_name/user_name 仅为旧版/兼容兜底。author 可能为 None
-        （如部分系统事件）。
-        """
         author = getattr(message, "author", None)
         if author is None:
             return ""
@@ -249,21 +221,17 @@ class XCLRClient(QQClient):
         return ""
 
     async def on_group_at_message_create(self, message: Any):
-        """处理 QQ 群聊@机器人消息 (GROUP_AT_MESSAGE_CREATE)"""
         self.logger.info(f"[EVENT] on_group_at_message_create triggered")
         await self.dispatcher.route(message, SCENE_GROUP_AT)
 
     async def on_group_message_create(self, message: Any):
-        """处理群聊全量消息 (GROUP_MESSAGE_CREATE)"""
         self.logger.info(f"[EVENT] on_group_message_create triggered")
         await self.dispatcher.route(message, SCENE_GROUP)
 
     async def on_direct_message_create(self, message: DirectMessage):
-        """处理频道私信消息 (DIRECT_MESSAGE_CREATE)"""
         await self.dispatcher.route(message, SCENE_DIRECT)
 
     async def on_at_message_create(self, message: Message):
-        """处理频道@机器人消息 (AT_MESSAGE_CREATE)"""
         self.logger.info(f"[EVENT] on_at_message_create triggered")
         await self.dispatcher.route(message, SCENE_AT)
 

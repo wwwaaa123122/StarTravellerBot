@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""天气插件 - 适配 QQ 开放平台"""
 
 import httpx
 import logging
@@ -8,7 +7,6 @@ _logger = logging.getLogger("weather")
 TRIGGER_KEYWORD = "天气"
 HELP_MESSAGE = "天气 <城市> -> 查询天气信息"
 
-# 天气描述中英文映射
 WEATHER_CN = {
     "Clear": "晴天",
     "Sunny": "晴天",
@@ -41,15 +39,12 @@ WEATHER_CN = {
 
 
 def _translate_weather(desc: str) -> str:
-    """翻译天气描述为中文"""
     if not desc:
         return "未知"
     
-    # 尝试精确匹配
     if desc in WEATHER_CN:
         return WEATHER_CN[desc]
     
-    # 尝试模糊匹配
     for en, cn in WEATHER_CN.items():
         if en.lower() in desc.lower() or desc.lower() in en.lower():
             return cn
@@ -58,13 +53,11 @@ def _translate_weather(desc: str) -> str:
 
 
 async def on_message(ctx):
-    """处理天气查询"""
     event = ctx.event
     actions = ctx.actions
     kwargs = ctx.kwargs
     content = event.message if hasattr(event, 'message') else ""
     
-    # 提取城市名
     if content.startswith("天气"):
         city = content[2:].strip()
     else:
@@ -75,7 +68,6 @@ async def on_message(ctx):
         return True
     
     try:
-        # 使用 wttr.in API 查询天气
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
                 f"https://wttr.in/{city}?format=j1",
@@ -89,25 +81,21 @@ async def on_message(ctx):
             data = response.json()
             current = data.get("current_condition", [{}])[0]
             
-            # 解析天气信息
             temp = current.get("temp_C", "未知")
             feels_like = current.get("FeelsLikeC", "未知")
             humidity = current.get("humidity", "未知")
             wind_speed = current.get("windspeedKmph", "未知")
             wind_dir = current.get("winddir16Point", "")
             
-            # 获取中文天气描述
             weather_desc = current.get("weatherDesc", [{}])[0].get("value", "")
             zh_desc = current.get("lang_zh", [{}])[0].get("value", "")
             description = zh_desc if zh_desc else _translate_weather(weather_desc)
             
-            # 获取预报
             forecast = data.get("weather", [])
             today_forecast = forecast[0] if forecast else {}
             max_temp = today_forecast.get("maxtempC", "未知")
             min_temp = today_forecast.get("mintempC", "未知")
             
-            # 获取日出日落
             astronomy = today_forecast.get("astronomy", [{}])[0] if today_forecast else {}
             sunrise = astronomy.get("sunrise", "").strip()
             sunset = astronomy.get("sunset", "").strip()

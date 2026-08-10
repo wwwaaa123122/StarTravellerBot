@@ -9,7 +9,6 @@ const prompts = ref({});
 const loading = ref(false);
 const saving = ref(false);
 
-// 对话框
 const dlgVisible = ref(false);
 const dlgTitle = ref("新建 Prompt");
 const dlgName = ref("");
@@ -144,7 +143,6 @@ const cards = computed(() => [
       </div>
     </el-skeleton>
 
-    <!-- 编辑对话框 -->
     <el-dialog v-model="dlgVisible" :title="dlgTitle" width="560px" :close-on-click-modal="false">
       <el-form label-position="top">
         <el-form-item label="名称" v-if="!isEdit">

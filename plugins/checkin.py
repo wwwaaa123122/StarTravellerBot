@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""签到插件 - 适配 QQ 开放平台 (与 [XY]GroupCheckIn 文本模式保持一致)"""
 
 import json
 import os
@@ -15,16 +14,13 @@ _logger = logging.getLogger("checkin")
 TRIGGER_KEYWORD = "签到"
 HELP_MESSAGE = "签到 -> 签到获取积分和好感度"
 
-# 数据库路径
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "checkin.db")
-# 旧 JSON 数据目录（用于迁移）
 JSON_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "checkin")
 
 _db: aiosqlite.Connection | None = None
 
 
 async def _get_db() -> aiosqlite.Connection:
-    """获取数据库连接（懒初始化），启用 WAL 模式提升并发性能。"""
     global _db
     if _db is None:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -38,7 +34,6 @@ async def _get_db() -> aiosqlite.Connection:
 
 
 async def _init_db():
-    """创建数据表和索引。"""
     await _db.execute(
         """CREATE TABLE IF NOT EXISTS checkin (
             user_id TEXT PRIMARY KEY,
@@ -56,7 +51,6 @@ async def _init_db():
 
 
 async def _migrate_json():
-    """将旧 JSON 文件迁移到 SQLite（仅首次运行）。"""
     if not os.path.isdir(JSON_DIR):
         return
 
@@ -64,7 +58,6 @@ async def _migrate_json():
     if not files:
         return
 
-    # 检查是否已迁移过（表中已有数据则跳过）
     cursor = await _db.execute("SELECT COUNT(*) FROM checkin")
     row = await cursor.fetchone()
     if row and row[0] > 0:
@@ -79,7 +72,6 @@ async def _migrate_json():
         except (json.JSONDecodeError, OSError):
             continue
 
-        # 兼容旧字段名
         user_id = data.get("user_id") or filename.replace(".json", "")
         if "积分" in data or "好感度" in data or "last_check" in data:
             points = data.get("points", data.get("积分", 0))
@@ -105,7 +97,6 @@ async def _migrate_json():
 
 
 async def _load_data(user_id: str) -> dict:
-    """加载用户签到数据"""
     db = await _get_db()
     cursor = await db.execute("SELECT * FROM checkin WHERE user_id = ?", (user_id,))
     row = await cursor.fetchone()
@@ -122,7 +113,6 @@ async def _load_data(user_id: str) -> dict:
 
 
 async def _save_data(user_id: str, data: dict):
-    """保存用户签到数据"""
     db = await _get_db()
     await db.execute(
         """INSERT OR REPLACE INTO checkin (user_id, points, affection, last_checkin, streak, nickname)
@@ -140,7 +130,6 @@ async def _save_data(user_id: str, data: dict):
 
 
 async def _get_daily_rank(today: str) -> int:
-    """获取今天第几名签到（通过 SQLite COUNT 查询）"""
     db = await _get_db()
     cursor = await db.execute(
         "SELECT COUNT(*) FROM checkin WHERE last_checkin = ?", (today,)
@@ -150,7 +139,6 @@ async def _get_daily_rank(today: str) -> int:
 
 
 async def _fetch_hitokoto() -> str:
-    """获取一言"""
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get("https://international.v1.hitokoto.cn/", timeout=5.0)
@@ -161,17 +149,14 @@ async def _fetch_hitokoto() -> str:
 
 
 async def on_message(ctx):
-    """处理签到命令"""
     event = ctx.event
     actions = ctx.actions
     kwargs = ctx.kwargs
     user_id = str(event.user_id)
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # 加载用户数据
     data = await _load_data(user_id)
 
-    # 检查是否已签到
     if data["last_checkin"] == today:
         msg = (
             "## 你今天已经签到过了哦~\n"
@@ -182,14 +167,11 @@ async def on_message(ctx):
         await actions.send(markdown={"content": msg})
         return True
 
-    # 签到排名
     rank = await _get_daily_rank(today)
 
-    # 计算奖励（与 [XY]GroupCheckIn 文本模式一致）
-    favor = random.randint(1, 10)      # 好感度
-    points = random.randint(10, 100)   # 积分
+    favor = random.randint(1, 10)
+    points = random.randint(10, 100)
 
-    # 更新数据
     nickname = getattr(event, "nickname", "") or ""
     if nickname:
         data["nickname"] = nickname
@@ -199,10 +181,8 @@ async def on_message(ctx):
     data["last_checkin"] = today
     await _save_data(user_id, data)
 
-    # 获取一言
     hitokoto_text = await _fetch_hitokoto()
 
-    # 发送签到结果（Markdown 格式）
     msg = (
         "## 签到成功！\n"
         f"你是第 **{rank}** 名签到的小伙伴\n"

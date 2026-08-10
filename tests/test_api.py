@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""API 封装测试：路由与请求体构造（mock HTTPClient）"""
 
 from unittest.mock import AsyncMock, MagicMock
 

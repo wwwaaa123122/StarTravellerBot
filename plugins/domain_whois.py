@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""域名Whois查询插件 - 适配 QQ 开放平台"""
 
 import asyncio
 import re
@@ -14,7 +13,6 @@ import logging
 
 _logger = logging.getLogger("Whois")
 
-# 尝试导入 whois 模块
 try:
     import whois as whois_module
     WHOIS_AVAILABLE = True
@@ -24,22 +22,18 @@ except ImportError:
 
 
 def _extract_contact_info(w) -> Dict[str, Any]:
-    """提取联系人和邮箱信息"""
     contact_info: Dict[str, Any] = {}
 
-    # 注册人信息
     if hasattr(w, 'registrant_name') and w.registrant_name:
         contact_info['registrant'] = w.registrant_name
     elif hasattr(w, 'name') and w.name:
         contact_info['registrant'] = w.name
 
-    # 注册组织
     if hasattr(w, 'registrant_organization') and w.registrant_organization:
         contact_info['organization'] = w.registrant_organization
     elif hasattr(w, 'org') and w.org:
         contact_info['organization'] = w.org
 
-    # 邮箱信息 - 尝试多个可能的字段
     emails = set()
 
     email_fields = ['emails', 'registrant_email', 'admin_email', 'tech_email',
@@ -55,7 +49,6 @@ def _extract_contact_info(w) -> Dict[str, Any]:
             elif isinstance(email_value, str) and '@' in email_value:
                 emails.add(email_value.strip().lower())
 
-    # 从原始文本中提取邮箱（备用方法）
     if not emails and hasattr(w, 'text'):
         email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         found_emails = re.findall(email_pattern, w.text)
@@ -63,13 +56,11 @@ def _extract_contact_info(w) -> Dict[str, Any]:
 
     contact_info['emails'] = list(emails)
 
-    # 地址信息
     if hasattr(w, 'registrant_address') and w.registrant_address:
         contact_info['address'] = w.registrant_address
     elif hasattr(w, 'address') and w.address:
         contact_info['address'] = w.address
 
-    # 国家信息
     if hasattr(w, 'registrant_country') and w.registrant_country:
         contact_info['country'] = w.registrant_country
     elif hasattr(w, 'country') and w.country:
@@ -79,17 +70,14 @@ def _extract_contact_info(w) -> Dict[str, Any]:
 
 
 def _format_whois_info(domain: str) -> str:
-    """获取并格式化 whois 信息"""
     if not WHOIS_AVAILABLE:
         return "❌ Whois 模块未安装，请在服务器上执行: pip install python-whois"
     
     try:
         w = whois_module.whois(domain)
 
-        # 格式化结果
         info = [f"## 🌐 Whois 查询结果 for {domain}"]
 
-        # 基础域名信息
         info.append("\n### 📄 基础信息")
         if w.domain_name:
             domain_name = w.domain_name
@@ -100,7 +88,6 @@ def _format_whois_info(domain: str) -> str:
         if w.registrar:
             info.append(f"- **注册商 (Registrar)**: {w.registrar}")
 
-        # 时间信息
         if w.creation_date:
             creation = w.creation_date
             if isinstance(creation, list):
@@ -125,7 +112,6 @@ def _format_whois_info(domain: str) -> str:
                 expiry = expiry.strftime("%Y-%m-%d %H:%M:%S")
             info.append(f"- **过期时间 (Expiry Date)**: {expiry}")
 
-        # 联系人和邮箱信息
         contact_info = _extract_contact_info(w)
 
         info.append("\n### 👤 注册人信息")
@@ -143,7 +129,7 @@ def _format_whois_info(domain: str) -> str:
                 info.append(f"- **邮箱 (Email)**: {emails[0]}")
             else:
                 info.append("- **邮箱 (Emails)**:")
-                for email in emails[:3]:  # 最多显示3个邮箱
+                for email in emails[:3]:
                     info.append(f"  - {email}")
                 if len(emails) > 3:
                     info.append(f"  - ... 还有 {len(emails) - 3} 个邮箱")
@@ -153,12 +139,11 @@ def _format_whois_info(domain: str) -> str:
         if contact_info.get('country'):
             info.append(f"- **国家 (Country)**: {contact_info['country']}")
 
-        # 技术信息
         info.append("\n### 🔧 技术信息")
         if w.name_servers:
             ns = w.name_servers
             if isinstance(ns, list):
-                ns = ", ".join(ns[:6])  # 最多显示5个NS
+                ns = ", ".join(ns[:6])
                 if len(w.name_servers) > 5:
                     ns += f" ... (共{len(w.name_servers)}个)"
             info.append(f"- **域名服务器 (Name Servers)**: {ns}")
@@ -169,7 +154,6 @@ def _format_whois_info(domain: str) -> str:
                 status = ", ".join(status)
             info.append(f"- **状态 (Status)**: {status}")
 
-        # 注册商信息
         if hasattr(w, 'registrar_url') and w.registrar_url:
             info.append(f"- **注册商网址 (Registrar URL)**: {w.registrar_url}")
 
@@ -185,13 +169,11 @@ def _format_whois_info(domain: str) -> str:
 
 
 async def on_message(ctx):
-    """处理 whois 查询"""
     event = ctx.event
     actions = ctx.actions
     kwargs = ctx.kwargs
     content = event.message if hasattr(event, 'message') else ""
 
-    # 提取域名
     if content.startswith("whois"):
         domain = content[5:].strip()
     else:
@@ -201,24 +183,19 @@ async def on_message(ctx):
         await actions.send(content="用法: whois <域名>\n例如: whois example.com\nwhois google.com")
         return True
 
-    # 简单的域名格式验证
     if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$', domain):
         await actions.send(content="域名格式不正确，请检查后重试")
         return True
 
-    # 发送查询中提示
     await actions.send(content=f"🔍 正在查询域名 {domain} 的WHOIS信息...")
     
-    # 添加延迟避免消息去重
     await asyncio.sleep(1)
 
-    # 执行查询
     try:
         _logger.info(f"正在查询: {domain}")
         result = await asyncio.get_running_loop().run_in_executor(None, _format_whois_info, domain)
         _logger.info(f"查询完成，结果长度: {len(result)}")
 
-        # 限制输出长度，避免刷屏
         if len(result) > 1500:
             result = result[:1500] + "\n...结果过长已截断，建议使用专业WHOIS工具查看完整信息..."
 

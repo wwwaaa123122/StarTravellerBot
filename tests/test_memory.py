@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""MemoryManager 分层记忆测试：摘要压缩 / 长期记忆读写 / AIChat 集成。"""
 
 import asyncio
 import json
@@ -68,7 +67,6 @@ async def test_compact_provider_failure(tmp_path):
 
 @pytest.mark.asyncio
 async def test_append_history_compacts_at_20(tmp_path):
-    """短期历史超 20 条：前 10 条异步摘要，短期保留最近 10 条。"""
     provider = MockProvider()
     mem = MemoryManager(data_dir=str(tmp_path), provider=provider)
     from Tools.rag_memory import RAGMemory
@@ -77,12 +75,11 @@ async def test_append_history_compacts_at_20(tmp_path):
         {"Others": {}}, BotContext(), rag, None, _logger(), "测试",
         memory=mem,
     )
-    for i in range(11):  # 11 轮 = 22 条消息
+    for i in range(11):
         chat._append_history("u1", f"q{i}", f"a{i}")
     assert len(chat.context.user_lists["u1"]) == 10
     assert chat.context.user_lists["u1"][0]["content"] == "q6"
 
-    # 等待异步压缩任务完成
     for _ in range(10):
         if (tmp_path / "memories.json").exists():
             break

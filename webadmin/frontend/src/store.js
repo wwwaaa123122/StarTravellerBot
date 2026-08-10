@@ -1,6 +1,5 @@
 import { reactive } from "vue";
 
-/** 全局状态：认证 / 主题 / 当前视图 */
 export const store = reactive({
   token: localStorage.getItem("st_token") || "",
   authenticated: !!localStorage.getItem("st_token"),

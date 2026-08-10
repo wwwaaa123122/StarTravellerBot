@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""StatsTracker 测试：统计记录与昵称持久化。"""
 
 import json
 
@@ -26,7 +25,7 @@ def test_record_ai_call_tokens(tmp_path):
 def test_nickname_map_roundtrip(tmp_path):
     tracker = StatsTracker(data_dir=str(tmp_path))
     tracker.record_nickname("openid-1", "小明")
-    tracker.record_nickname("openid-1", "小明")  # 重复写入应跳过
+    tracker.record_nickname("openid-1", "小明")
     data = json.loads((tmp_path / "nickname_map.json").read_text(encoding="utf-8"))
     assert data == {"openid-1": "小明"}
 

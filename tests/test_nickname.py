@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""用户昵称获取测试
-
-结论（依据官方文档）：QQ 开放平台 v2 没有「按 openid 主动查询用户昵称」的
-REST 接口，昵称只能被动从消息事件中获取——事件体 ``author.username`` 字段即
-「用户昵称」。本测试用官方文档结构的事件体走 SDK 分发 + 客户端提取逻辑，
-验证昵称能正确取到。
-"""
 
 import pytest
 
@@ -46,7 +39,6 @@ C2C_PAYLOAD = {
 
 
 class NicknameCollector:
-    """模拟机器人客户端的昵称提取（与 client.XCLRClient._try_get_nickname 同逻辑）"""
 
     def __init__(self):
         self.extracted = []

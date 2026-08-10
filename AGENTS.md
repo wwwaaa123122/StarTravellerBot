@@ -16,15 +16,15 @@ python main.py
 
 ```
 StarTravellerBot/
-├── main.py          # 入口，加载 .env + config.json，创建 XCLRClient
+├── main.py          # 入口，加载 .env，创建 XCLRClient
 ├── client.py        # XCLRClient：事件入口 + AI 调度（<300 行）
-├── config/          # 配置系统：loader（环境变量 > .env > config.json > 默认值）+ schema（类型化访问）
+├── config/          # 配置系统：loader（环境变量 > .env > 默认值）+ schema（类型化访问）
 ├── core/            # 核心模块：dispatcher（场景路由）/ plugin_manager / messenger / stats / http
 ├── ai/              # AI 模块（chat / role_manager / roleplay / function_calling）
 ├── plugins/         # 插件目录，动态加载（TRIGGER_KEYWORD 触发）
 ├── webadmin/        # Web 管理后台（独立 Flask 服务）
 ├── data/            # 持久化数据（签到、角色、RAG、统计）
-└── .env             # AppID + AppSecret（必须配置）
+└── .env             # 全部配置（AppID + AppSecret 必填，模板见 .env.example）
 ```
 
 ## 关键依赖关系
@@ -35,7 +35,7 @@ StarTravellerBot/
 - `Tools/rag_memory.py` - `RAGMemory`（TF-IDF 对话记忆）
 - `ai/` - `AIChat` / `RoleManager` / `roleplay` / `function_calling`
 - `core/` - `Dispatcher`（场景路由）/ `PluginManager` / `Messenger` / `StatsTracker` / 共享 HTTP 客户端
-- `config/` - 配置加载（环境变量 > .env > config.json > 默认值）
+- `config/` - 配置加载（环境变量 > .env > 默认值）
 
 ## 插件系统
 
@@ -60,9 +60,10 @@ AI 调用链：`AIChat.run_with_tools`（OpenAI 兼容接口，默认 DeepSeek�
 
 ## 配置
 
-- `.env`：`STAR_QO_APPID`, `STAR_QO_SECRET`（必填）、AI 密钥、管理后台密码
-- `config.json`：AI 模型参数、机器人名称、ROOT_User、webadmin 等
-- 优先级：环境变量 > `.env` > `config.json` > 默认值（`config/loader.py`）
+全部配置通过 `.env` 文件（或环境变量）提供，模板见 `.env.example`：
+- 必填：`STAR_QO_APPID`, `STAR_QO_SECRET`
+- AI 密钥、机器人名称/ROOT_User、webadmin、定时群发等均以 `STAR_*` 环境变量配置
+- 优先级：环境变量 > `.env` > 默认值（`config/loader.py`）
 
 ## 注意事项
 

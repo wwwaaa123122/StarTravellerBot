@@ -1,12 +1,4 @@
 # -*- coding: utf-8 -*-
-"""纯 Python 的 psutil 兼容替代库（Termux/Android 可用）。
-
-一行替换：import qqbot_openapi.psutil_compat as psutil
-- Android/Termux 或未安装 psutil：纯 Python 实现（读 /proc，零第三方依赖）；
-- 桌面 Linux 且已安装 psutil：委托给真实 psutil；
-- 非 Linux 且无 psutil：调用时抛 RuntimeError（提示安装 psutil）。
-- PSUTIL_COMPAT_PURE=1 强制纯实现；PSUTIL_COMPAT_DEBUG=1 打印选择细节。
-"""
 
 import logging
 import os
@@ -59,7 +51,6 @@ else:
     _USE_REAL = False
     _log_reason = "psutil 未安装，使用纯 Python 实现"
 
-# Python 3.13 起 Termux 的 sys.platform 为 "android"
 _PURE_OK = sys.platform.startswith("linux") or sys.platform == "android"
 
 
@@ -75,7 +66,6 @@ _warned = set()
 
 
 def _warn_once(key, msg):
-    """同类失败只告警一次，避免每次请求刷屏。"""
     if key not in _warned:
         _warned.add(key)
         logger.warning(msg, exc_info=True)
@@ -95,7 +85,6 @@ _last_cpu = None
 
 
 def _parse_cpu_line(line):
-    # guest/guest_nice 已计入 user/nice，先扣除避免重复计数
     nums = [int(p) for p in line.split()[1:]]
     while len(nums) < 10:
         nums.append(0)
@@ -125,7 +114,7 @@ def _pure_cpu_percent(interval=None):
         else:
             before = _last_cpu
             after = _read_cpu_times()
-            if before is None:  # 首次无间隔调用无基线，返回 0.0（同 psutil）
+            if before is None:
                 _last_cpu = after
                 return 0.0
         total_delta = after[0] - before[0]
@@ -145,7 +134,6 @@ def _pure_cpu_count(logical=True):
         if logical:
             n = os.cpu_count()
             return n if n else 1
-        # 物理核数按 core id 去重；Android 常缺失，回退逻辑核数
         cores = set()
         with open(os.path.join(_PROC, "cpuinfo"), "r", encoding="utf-8") as f:
             for line in f:
@@ -182,7 +170,7 @@ def _pure_virtual_memory():
         d = _read_meminfo()
         total = d.get("MemTotal", 0)
         free = d.get("MemFree", 0)
-        if "MemAvailable" in d:  # 内核 3.14+ 直接给可用值
+        if "MemAvailable" in d:
             available = d.get("MemAvailable", 0)
             used = max(total - available, 0)
         else:
@@ -230,7 +218,6 @@ def _pure_boot_time():
     if _boot_time_cache is not None:
         return _boot_time_cache
     try:
-        # Android 上 /proc/stat 常被 SELinux 拒绝，随后尝试 /proc/uptime
         try:
             with open(os.path.join(_PROC, "stat"), "r", encoding="utf-8") as f:
                 for line in f:
@@ -264,7 +251,6 @@ def _iter_pids():
 
 
 class _Process:
-    """psutil.Process 的纯 Python 实现，Android SELinux 限制下全容错。"""
 
     def __init__(self, pid=None):
         self._pid = os.getpid() if pid is None else int(pid)
@@ -285,7 +271,7 @@ class _Process:
         try:
             with open(self._path(name), "rb") as f:
                 return f.read()
-        except Exception:  # Android 上其他进程的 /proc 常被 SELinux 拒绝
+        except Exception:
             return default
 
     def cmdline(self):
@@ -332,49 +318,42 @@ def _pure_process_iter(attrs=None, ad_value=None):
 
 
 def cpu_percent(interval=None):
-    """CPU 使用率百分比（0.0 ~ 100.0）。"""
     if _USE_REAL:
         return _real.cpu_percent(interval=interval)
     return _pure_cpu_percent(interval)
 
 
 def cpu_count(logical=True):
-    """CPU 逻辑核数；logical=False 时尽力给出物理核数。"""
     if _USE_REAL:
         return _real.cpu_count(logical=logical)
     return _pure_cpu_count(logical)
 
 
 def virtual_memory():
-    """内存统计 svmem(total, available, percent, used, free, ...)。"""
     if _USE_REAL:
         return _real.virtual_memory()
     return _pure_virtual_memory()
 
 
 def disk_usage(path):
-    """磁盘使用统计 sdiskusage(total, used, free, percent)。"""
     if _USE_REAL:
         return _real.disk_usage(path)
     return _pure_disk_usage(path)
 
 
 def boot_time():
-    """系统启动时间戳（秒）。"""
     if _USE_REAL:
         return _real.boot_time()
     return _pure_boot_time()
 
 
 def process_iter(attrs=None, ad_value=None):
-    """遍历进程；attrs 指定后通过 p.info 暴露。"""
     if _USE_REAL:
         return _real.process_iter(attrs=attrs, ad_value=ad_value)
     return _pure_process_iter(attrs=attrs, ad_value=ad_value)
 
 
 def Process(pid=None):
-    """进程对象工厂，兼容 psutil.Process(pid)。"""
     if _USE_REAL:
         return _real.Process(pid)
     return _Process(pid)

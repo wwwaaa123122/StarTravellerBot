@@ -1,20 +1,4 @@
 # -*- coding: utf-8 -*-
-"""StarTraveller 管理后台 - 独立 Flask 服务
-
-独立于机器人主进程运行（不修改 client.py / main.py），按需读取机器人数据：
-  - 数据文件：data/checkin、data/roles、data/rag、data/scheduled_sent.json
-  - 系统状态：内置 psutil_compat（CPU / 内存 / 磁盘 / 进程存活检测，Termux/Android 可用）
-
-启动：
-    python -m webadmin.server --host 0.0.0.0 --port 8765
-
-配置优先级（高 -> 低）：
-    环境变量  STAR_TRAVELLER_ADMIN_HOST / _PORT / _PASSWORD
-    config.json 中的 "webadmin" 段
-    内置默认值（0.0.0.0:8765，密码 admin123）
-注意：
-    默认监听 0.0.0.0（所有网卡），访问时不校验 Host 头端口，请务必设置强密码。
-"""
 
 import base64
 import hashlib
@@ -34,7 +18,7 @@ from flask import Flask, Response, g, jsonify, request, send_from_directory
 
 try:
     import pytz
-except ImportError:  # 非必需依赖
+except ImportError:
     pytz = None
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -50,7 +34,7 @@ VISITS_FILE = os.path.join(WEBADMIN_DATA_DIR, "visits.json")
 STATS_FILE = os.path.join(DATA_DIR, "stats.json")
 PLUGINS_ENABLED_FILE = os.path.join(DATA_DIR, "plugins_enabled.json")
 PROMPTS_FILE = os.path.join(DATA_DIR, "prompts.json")
-CONFIG_FILE = None
+ENV_FILE = os.path.join(PROJECT_ROOT, ".env")
 
 VERSION = "0.1.0"
 
@@ -63,7 +47,6 @@ DEFAULT_ROLE_NAMES = {
 app = Flask(__name__, static_folder=None)
 app.json.ensure_ascii = False
 
-# ---------------------------------------------------------------- 基础工具
 
 def _read_json(path, default=None):
     try:
@@ -81,48 +64,45 @@ def _write_json(path, data):
     os.replace(tmp, path)
 
 
-def _find_config_file():
-    """按优先级查找 config.json（项目根目录 -> 父级 XCLR_QQ_bot）。"""
-    candidates = [
-        os.path.join(PROJECT_ROOT, "config.json"),
-        os.path.join(os.path.dirname(PROJECT_ROOT), "XCLR_QQ_bot", "config.json"),
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return None
+def _write_env(pairs: dict):
+    lines = []
+    if os.path.exists(ENV_FILE):
+        with open(ENV_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    out = []
+    written = set()
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.partition("=")[0].strip()
+            if key in pairs:
+                out.append(f"{key}={pairs[key]}\n")
+                written.add(key)
+                continue
+        out.append(line)
+    for key, value in pairs.items():
+        if key not in written:
+            out.append(f"{key}={value}\n")
+    with open(ENV_FILE, "w", encoding="utf-8") as f:
+        f.writelines(out)
 
 
 def _bot_config():
-    global CONFIG_FILE
-    if CONFIG_FILE is None:
-        CONFIG_FILE = _find_config_file()
-    if not CONFIG_FILE:
-        return {}
-    data = _read_json(CONFIG_FILE, {}) or {}
-    return data
+    from config import load_settings
+    return load_settings().data
 
 
 def _admin_config():
-    """管理后台自身配置（端口 / 密码等）。"""
     cfg = _bot_config().get("webadmin", {}) or {}
     return cfg
 
 
 def _nickname_map():
-    """读取全局昵称对照表 data/nickname_map.json（openid -> 昵称）。
-
-    由 client.py 在收到消息事件时维护，用于展示聊天用户昵称。
-    """
     data = _read_json(os.path.join(DATA_DIR, "nickname_map.json"), {}) or {}
     return data if isinstance(data, dict) else {}
 
 
 def _checkin_users():
-    """从 SQLite checkin.db 读取用户列表，按积分降序排列。
-
-    昵称优先取签到数据，为空时回退到全局昵称对照表。
-    """
     nick_map = _nickname_map()
     db_path = os.path.join(DATA_DIR, "checkin.db")
     if not os.path.exists(db_path):
@@ -144,10 +124,7 @@ def _checkin_users():
     return users
 
 
-# ---------------------------------------------------------------- 角色
-
 def _load_roles():
-    """加载角色数据：优先 RoleManager 的 roles.json，回退 user_roles.json。"""
     data = _read_json(os.path.join(ROLES_DIR, "roles.json"), {}) or {}
     roles = dict(DEFAULT_ROLE_NAMES)
     roles.update({rid: (r.get("name") if isinstance(r, dict) else str(r))
@@ -160,7 +137,6 @@ def _load_roles():
 
 
 def _scan_plugins():
-    """扫描 plugins/*.py，提取关键字与帮助信息。"""
     _kw = re.compile(r'TRIG(?:GER|GHT)_KEYWORD\s*=\s*"([^"]*)"')
     _help = re.compile(r'HELP_MESSAGE\s*=\s*"([^"]*)"')
     plugins = []
@@ -186,7 +162,6 @@ def _scan_plugins():
 
 
 def _rag_records(limit=300):
-    """聚合 data/rag/*.json 中的长期记忆片段。"""
     records = []
     if os.path.isdir(RAG_DIR):
         for name in sorted(os.listdir(RAG_DIR)):
@@ -206,7 +181,6 @@ def _rag_records(limit=300):
 
 
 def _visit_activity(days=14):
-    """按天聚合访问数据（本地文件记录，避免污染机器人数据）。"""
     data = _read_json(VISITS_FILE, {"total": 0, "hits": []}) or {}
     total = int(data.get("total", 0))
     hits = [h for h in data.get("hits", []) if isinstance(h, (int, float))]
@@ -224,7 +198,6 @@ def _visit_activity(days=14):
 
 
 def _track_visit():
-    """记录一次后台访问（保留最近 2000 条时间戳）。"""
     try:
         data = _read_json(VISITS_FILE, {"total": 0, "hits": []}) or {}
         data["total"] = int(data.get("total", 0)) + 1
@@ -237,12 +210,6 @@ def _track_visit():
 
 
 def _bot_process():
-    """判断机器人主进程是否在运行。
-
-    优先识别嵌入模式：webadmin 随 main.py 同步启动时通过环境变量
-    STAR_TRAVELLER_EMBEDDED=1 标记，此时机器人必然在同一进程内运行；
-    否则扫描 psutil 命令行兜底（独立启动场景）。
-    """
     if os.environ.get("STAR_TRAVELLER_EMBEDDED") == "1":
         return {"running": True, "pid": os.getpid()}
     for p in psutil.process_iter(["cmdline"]):
@@ -276,7 +243,6 @@ def _system_status():
 
 
 def _read_stats():
-    """读取机器人统计信息（由 client.py 写入）。"""
     default = {
         "total_messages": 0,
         "messages_today": {"date": time.strftime("%Y-%m-%d"), "count": 0},
@@ -298,7 +264,6 @@ def _read_plugins_enabled():
 
 
 def _read_ai_stats():
-    """读取 AI 调用明细统计（由 ai/cost_tracker.py 写入）。"""
     data = _read_json(os.path.join(DATA_DIR, "ai_stats.json"), {}) or {}
     requests = data.get("requests", 0)
     data["avg_latency"] = round(data.get("latency_sum", 0) / requests, 2) if requests else 0.0
@@ -323,7 +288,6 @@ def _uptime_text(seconds):
     return f"{m}分"
 
 
-# ---------------------------------------------------------------- 认证
 
 def _load_secret():
     os.makedirs(WEBADMIN_DATA_DIR, exist_ok=True)
@@ -366,7 +330,7 @@ def _verify_token(token):
         return None
 
 
-_LOGIN_RATE = {}  # ip -> [timestamps]
+_LOGIN_RATE = {}
 
 
 def _login_rate_limit(ip):
@@ -397,7 +361,6 @@ def admin_password():
     return "admin123"
 
 
-# ---------------------------------------------------------------- API
 
 @app.get("/admin/api/ping")
 def api_ping():
@@ -429,7 +392,6 @@ def api_overview():
     for uid, rid in roles["users"].items():
         role_dist[roles["roles"].get(rid, rid)] = role_dist.get(roles["roles"].get(rid, rid), 0) + 1
 
-    # 近 14 天签到趋势
     from datetime import datetime, timedelta
     days = []
     for i in range(13, -1, -1):
@@ -548,7 +510,7 @@ def api_config():
         "log_level": cfg.get("Log_level") or cfg.get("log_level"),
         "sandbox": cfg.get("is_sandbox"),
         "openqq_appid": cfg.get("appid") or cfg.get("openqq", {}).get("appid"),
-        "config_path": CONFIG_FILE,
+        "config_path": ENV_FILE,
     }
     return jsonify({"config": masked, "bot_info": bot_info, "version": VERSION})
 
@@ -581,7 +543,6 @@ def _mask_dict(obj, depth=0):
     return obj
 
 
-# ---------------------------------------------------------------- Stats
 
 @app.get("/admin/api/stats")
 @require_auth
@@ -604,7 +565,6 @@ def api_stats_reset():
     return jsonify({"ok": True, "stats": default})
 
 
-# ---------------------------------------------------------------- 权限管理
 
 @app.get("/admin/api/permissions")
 @require_auth
@@ -622,21 +582,17 @@ def api_permissions():
 @require_auth
 def api_permissions_put():
     body = request.get_json(silent=True) or {}
-    cfg = _bot_config()
-    if not CONFIG_FILE:
-        return jsonify({"error": "config_not_found", "message": "config.json 未找到"}), 400
-    others = cfg.setdefault("Others", {})
+    pairs = {}
     if "root_users" in body:
-        others["ROOT_User"] = body["root_users"]
+        pairs["STAR_BOT_ROOT_USER"] = ",".join(body["root_users"] or [])
     if "blacklist" in body:
-        cfg["black_list"] = body["blacklist"]
+        pairs["STAR_BLACK_LIST"] = ",".join(body["blacklist"] or [])
     if "allow_ai" in body:
-        others["allow_ai"] = body["allow_ai"]
-    _write_json(CONFIG_FILE, cfg)
+        pairs["STAR_BOT_ALLOW_AI"] = "true" if body["allow_ai"] else "false"
+    _write_env(pairs)
     return jsonify({"ok": True})
 
 
-# ---------------------------------------------------------------- 插件开关
 
 @app.get("/admin/api/plugins/toggle")
 @require_auth
@@ -665,12 +621,10 @@ def api_plugins_toggle_put():
         if isinstance(state, bool):
             enabled[name] = state
     _write_json(PLUGINS_ENABLED_FILE, enabled)
-    # 写重载标记，机器人进程在 ~10s 内热重载插件
     _write_json(os.path.join(DATA_DIR, "reload.flag"), {"ts": time.time()})
     return jsonify({"ok": True, "plugins": enabled})
 
 
-# ---------------------------------------------------------------- AI 设置
 
 @app.get("/admin/api/ai-settings")
 @require_auth
@@ -693,21 +647,26 @@ def api_ai_settings():
 @require_auth
 def api_ai_settings_put():
     body = request.get_json(silent=True) or {}
-    cfg = _bot_config()
-    if not CONFIG_FILE:
-        return jsonify({"error": "config_not_found", "message": "config.json 未找到"}), 400
-    others = cfg.setdefault("Others", {})
-    skip_mask = ("value", "key", "secret", "token", "api")
-    for k in ("ai_model", "ai_base_url", "ai_max_tokens", "ai_temperature",
-              "deepseek_key", "gemini_key", "openai_key", "EnableNetwork"):
-        if k in body and body[k] is not None and not any(t in str(body[k]) for t in skip_mask):
-            if not str(body[k]).startswith("***"):
-                others[k] = body[k]
-    _write_json(CONFIG_FILE, cfg)
+    field_map = {
+        "ai_model": "STAR_AI_MODEL",
+        "ai_base_url": "STAR_AI_BASE_URL",
+        "ai_max_tokens": "STAR_AI_MAX_TOKENS",
+        "ai_temperature": "STAR_AI_TEMPERATURE",
+        "deepseek_key": "STAR_DEEPSEEK_KEY",
+        "gemini_key": "STAR_GEMINI_KEY",
+        "openai_key": "STAR_OPENAI_KEY",
+        "EnableNetwork": "STAR_BOT_DEFAULT_MODE",
+    }
+    pairs = {}
+    for field, env_key in field_map.items():
+        val = body.get(field)
+        if val is None or str(val).startswith("***"):
+            continue
+        pairs[env_key] = str(val)
+    _write_env(pairs)
     return jsonify({"ok": True})
 
 
-# ---------------------------------------------------------------- Prompt 管理
 
 @app.get("/admin/api/prompts")
 @require_auth
@@ -773,7 +732,6 @@ def server_error(e):
     return jsonify({"error": "internal", "message": str(e)}), 500
 
 
-# ---------------------------------------------------------------- 静态页面
 
 @app.get("/admin")
 def admin_index():
@@ -786,7 +744,6 @@ def admin_static(filename):
 
 
 def _resolve_admin_addr(host=None, port=None):
-    """解析管理后台监听地址：参数 > 环境变量 > config.json webadmin 段 > 默认值。"""
     host = host or os.environ.get("STAR_TRAVELLER_ADMIN_HOST") \
         or _admin_config().get("host") or "0.0.0.0"
     port = port or int(os.environ.get("STAR_TRAVELLER_ADMIN_PORT") or 0) \
@@ -803,11 +760,6 @@ def _print_banner(host, port):
 
 
 def start_server(host=None, port=None, password=None):
-    """以守护线程启动管理后台，供 main.py 同步启动调用（不阻塞机器人事件循环）。
-
-    参数优先级：显式参数 > 环境变量 > config.json 的 webadmin 段 > 默认值。
-    成功返回后台线程对象；端口占用等失败场景返回 None（不中断机器人）。
-    """
     import threading
     from werkzeug.serving import make_server
 

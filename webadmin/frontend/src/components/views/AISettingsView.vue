@@ -8,7 +8,6 @@ const settings = ref({});
 const loading = ref(false);
 const saving = ref(false);
 
-// 编辑用的表单数据
 const form = ref({
   ai_model: "",
   ai_base_url: "",
@@ -53,7 +52,6 @@ async function save() {
       ai_temperature: Number(form.value.ai_temperature),
       EnableNetwork: form.value.enable_network,
     };
-    // 只在用户输入了新密钥时才发送
     if (form.value.deepseek_key.trim()) body.deepseek_key = form.value.deepseek_key.trim();
     if (form.value.gemini_key.trim()) body.gemini_key = form.value.gemini_key.trim();
     if (form.value.openai_key.trim()) body.openai_key = form.value.openai_key.trim();

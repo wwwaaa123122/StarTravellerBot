@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-"""分层记忆：短期上下文 → 摘要 → 长期记忆 → RAG。
-
-短期上下文由 BotContext.user_lists 管理（每用户最多 20 条）；
-超限时前 10 条经 AI 压缩为摘要存入长期记忆（data/memories.json），
-短期只保留最近 10 条，控制后续请求的 token 消耗。
-"""
 
 import json
 import os
@@ -17,7 +11,6 @@ _SUMMARY_PROMPT = (
 
 
 class MemoryManager:
-    """长期记忆：按用户存储对话摘要，构建上下文时与短期/RAG 一起注入。"""
 
     def __init__(self, data_dir: str, provider=None, logger=None):
         self.memories_file = os.path.join(data_dir, "memories.json")
@@ -45,7 +38,6 @@ class MemoryManager:
             pass
 
     def get_long_term(self, user_id: str) -> str:
-        """拼接用户长期记忆文本（最近 5 条摘要）；无则返回空串。"""
         summaries = self._load().get(user_id, [])
         if not summaries:
             return ""
@@ -53,7 +45,6 @@ class MemoryManager:
         return f"长期记忆（来自过往对话摘要）：\n{lines}"
 
     async def summarize(self, history: List[dict]) -> Optional[str]:
-        """把一段对话压缩为摘要；失败或输入过短返回 None。"""
         if not self.provider or len(history) < 2:
             return None
         transcript = "\n".join(
@@ -75,7 +66,6 @@ class MemoryManager:
             return None
 
     async def compact(self, user_id: str, history: List[dict]) -> bool:
-        """把 history 摘要后追加到长期记忆；返回是否成功写入。"""
         summary = await self.summarize(history)
         if not summary:
             return False

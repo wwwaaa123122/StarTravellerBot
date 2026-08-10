@@ -30,7 +30,6 @@ async def on_message(ctx):
         return False
     result = order[start + len("生图 ACG "):].strip()
 
-    # 帮助
     if "帮助" in result:
         lines = [f"### ✨ {bot_name} ACG 壁纸生成"]
         for k in API_URLS:
@@ -40,7 +39,6 @@ async def on_message(ctx):
         await actions.send(content="\n".join(lines))
         return True
 
-    # 检查类型
     matched_type = None
     for t in API_URLS:
         if t in result:
@@ -55,7 +53,6 @@ async def on_message(ctx):
         await actions.send(content="\n".join(lines))
         return True
 
-    # 冷却检查
     root_users = kwargs.get('ROOT_User', [])
     is_super = str(user_id) in root_users
 
@@ -64,7 +61,6 @@ async def on_message(ctx):
         await actions.send(content=f"⏳ 18秒冷却中，请等待 **{remaining:.1f}** 秒")
         return True
 
-    # 发送图片
     api_url = API_URLS[matched_type]
     _cooldowns[user_id] = now
 

@@ -1,11 +1,3 @@
-"""B 站视频解析插件
-
-触发方式（群聊）：
-    b站 <b23.tv短链 / bilibili.com链接 / BV号 / av号>
-
-功能：还原短链 → 调用官方 view API → 输出视频信息卡片图（Pillow 合成）。
-"""
-
 import logging
 import math
 import re
@@ -35,7 +27,6 @@ PATTERNS = [
     r"\bav\d+\b",
 ]
 
-# ---- 字体 & 常量 ----
 FONT_PATH = "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"
 CARD_W, CARD_H = 720, 405
 PAD = 24
@@ -142,7 +133,6 @@ def _make_circle_mask(size: int) -> Image.Image:
 
 
 def _draw_icon(draw, x, y, icon_type, color, size):
-    """Draw a simple geometric icon using Pillow drawing primitives."""
     s = size
 
     if icon_type == "play":
@@ -211,7 +201,6 @@ def _generate_card(
     share: str,
     cover_bytes: bytes | None,
 ) -> BytesIO:
-    """用 Pillow 合成 B 站视频信息卡片，返回 PNG BytesIO。"""
     img = Image.new("RGB", (CARD_W, CARD_H), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
@@ -226,11 +215,9 @@ def _generate_card(
         font_value = font_title
         font_small = font_title
 
-    # 卡片背景
     card_rect = [PAD, PAD, CARD_W - PAD, CARD_H - PAD]
     draw.rounded_rectangle(card_rect, radius=16, fill=CARD_BG, outline=BORDER_COLOR, width=1)
 
-    # ---- 标题 ----
     title_x = PAD + 16
     title_y = PAD + 16
     max_title_w = CARD_W - PAD * 2 - 32
@@ -238,16 +225,13 @@ def _generate_card(
     for i, line in enumerate(title_lines):
         draw.text((title_x, title_y + i * 26), line, fill=TITLE_COLOR, font=font_title)
 
-    # 分割线
     div_y = title_y + len(title_lines) * 26 + 10
     draw.line([(title_x, div_y), (CARD_W - PAD - 16, div_y)], fill=BORDER_COLOR, width=1)
 
-    # ---- 左侧信息 ----
     info_x = PAD + 16
     info_y = div_y + 15
     row_gap = 24
 
-    # 行1: 头像 + UP主名
     avatar_size = 34
     if owner_face_bytes:
         try:
@@ -269,12 +253,10 @@ def _generate_card(
     name_x = info_x + avatar_size + 12
     draw.text((name_x, info_y + 8), owner_name, fill=VALUE_COLOR, font=font_label)
 
-    # 行2: 发布时间 + 时长
     row2_y = info_y + row_gap + 8
     time_text = f"发布时间: {pub_str}  |  时长: {duration}" if pub_str else f"时长: {duration}"
     draw.text((info_x, row2_y), time_text, fill=LABEL_COLOR, font=font_small)
 
-    # 行3: 播放 + 评论
     row3_y = row2_y + row_gap
     _draw_stat_row(
         draw, info_x, row3_y,
@@ -283,7 +265,6 @@ def _generate_card(
         font_label, font_value,
     )
 
-    # 行4: 点赞 + 收藏
     row4_y = row3_y + row_gap
     _draw_stat_row(
         draw, info_x, row4_y,
@@ -292,7 +273,6 @@ def _generate_card(
         font_label, font_value,
     )
 
-    # 行5: 分享 + 投币
     row5_y = row4_y + row_gap
     _draw_stat_row(
         draw, info_x, row5_y,
@@ -301,12 +281,10 @@ def _generate_card(
         font_label, font_value,
     )
 
-    # 弹幕
     danmaku_y = row5_y + row_gap
     _draw_icon(draw, info_x, danmaku_y + 1, "danmaku", ACCENT_CMT, ICON_SIZE)
     draw.text((info_x + ICON_SIZE + 4, danmaku_y), f"弹幕: {danmaku}", fill=LABEL_COLOR, font=font_small)
 
-    # ---- 右侧封面 ----
     if cover_bytes:
         try:
             cover = Image.open(BytesIO(cover_bytes)).convert("RGB")
@@ -341,7 +319,6 @@ async def on_message(ctx):
     order = kwargs.get("order", "") or ""
     target = _extract_target(order)
     if not target:
-        # 仅当用户主动发起命令时才回复帮助，其余消息静默略过
         if order.lower().startswith("b站"):
             await actions.send(content=f"无法识别链接，用法：{HELP_MESSAGE}")
             return True
@@ -397,7 +374,6 @@ async def on_message(ctx):
     if pubdate:
         pub_str = time.strftime("%Y-%m-%d", time.localtime(pubdate))
 
-    # 下载封面图和头像
     try:
         async with httpx.AsyncClient() as session:
             cover_bytes = await _download_image(session, pic) if pic else None
@@ -407,7 +383,6 @@ async def on_message(ctx):
         cover_bytes = None
         avatar_bytes = None
 
-    # 生成卡片图
     try:
         card_buf = _generate_card(
             title=title,

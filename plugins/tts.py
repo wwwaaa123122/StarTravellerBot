@@ -10,7 +10,6 @@ HELP_MESSAGE = "语音 <文本> -> 将文本转为语音并发送"
 
 
 def sanitize_for_tts(text: str) -> str:
-    """清理文本中的 markdown/颜文字，保留适合 TTS 朗读的纯文本"""
     text = re.sub(r'```[\s\S]*?```', '', text)
     text = re.sub(r'`(.*?)`', r'\1', text)
     text = re.sub(r'!?\[(.*?)\]\(.*?\)', r'\1', text)
@@ -26,7 +25,6 @@ def sanitize_for_tts(text: str) -> str:
 
 
 def _get_tts_config(config: dict) -> dict:
-    """从配置中读取 TTS 设置（参照父项目 config.Others.TTS）"""
     others = config.get("Others", {})
     tts_cfg = others.get("TTS", others.get("TTs", {}))
     if not tts_cfg:
@@ -40,7 +38,6 @@ def _get_tts_config(config: dict) -> dict:
 
 
 async def _generate_tts(text: str, config: dict) -> str:
-    """使用 edge-tts 生成语音文件"""
     import edge_tts
 
     tts_cfg = _get_tts_config(config)

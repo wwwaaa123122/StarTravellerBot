@@ -1,19 +1,9 @@
-"""
-AI Function Calling 模块
-- 定义所有可用工具的 OpenAI schema
-- 权限控制（ROOT 用户可操作所有工具，普通用户仅安全工具）
-- 工具执行器（mock event/actions，捕获插件输出）
-"""
-
 import json
 import logging
 from typing import Any, Callable
 
 logger = logging.getLogger("function_calling")
 
-# ---------------------------------------------------------------------------
-# 工具定义（OpenAI Function Calling 格式）
-# ---------------------------------------------------------------------------
 
 TOOL_DEFINITIONS = [
     {
@@ -285,13 +275,7 @@ TOOL_DEFINITIONS = [
     },
 ]
 
-# ---------------------------------------------------------------------------
-# 权限定义
-# ---------------------------------------------------------------------------
 
-# 所有工具及其权限级别
-# "anyone": 所有用户可用
-# "root": 仅 ROOT 用户可用
 TOOL_PERMISSIONS = {
     "weather": "anyone",
     "ping": "anyone",
@@ -315,7 +299,6 @@ TOOL_PERMISSIONS = {
 
 
 def get_available_tools(user_id: str, root_users: set) -> list:
-    """根据用户权限返回可用的工具定义列表"""
     is_root = user_id in root_users
     available = []
     for tool in TOOL_DEFINITIONS:
@@ -326,28 +309,19 @@ def get_available_tools(user_id: str, root_users: set) -> list:
     return available
 
 
-# ---------------------------------------------------------------------------
-# 工具处理器注册表
-# ---------------------------------------------------------------------------
-
-# 格式: tool_name -> (plugin_module, message_builder)
-# message_builder: Callable[[dict], str] - 接收工具参数 dict，返回命令字符串
 _TOOL_HANDLERS: dict[str, tuple[Any, Callable[[dict], str]]] = {}
 
 
 def _register_tool(tool_name: str, plugin_module: Any, message_builder: Callable[[dict], str]):
-    """注册工具处理器"""
     _TOOL_HANDLERS[tool_name] = (plugin_module, message_builder)
 
 
 def _load_plugin(module_name: str):
-    """延迟加载插件模块"""
     import importlib
     return importlib.import_module(module_name)
 
 
 def _init_handlers():
-    """初始化所有工具处理器（延迟加载插件模块）"""
     if _TOOL_HANDLERS:
         return
 
@@ -370,7 +344,6 @@ def _init_handlers():
     _register_tool("affection", _load_plugin("plugins.affection"),
                    lambda args: "好感度")
 
-    # Kick 子命令
     kick_module = _load_plugin("plugins.kick")
     _register_tool("kick_query", kick_module,
                    lambda args: f"kick {args.get('name', '')}")
@@ -392,19 +365,13 @@ def _init_handlers():
                    lambda args: "kick stop")
 
 
-# ---------------------------------------------------------------------------
-# Mock Actions - 捕获插件输出
-# ---------------------------------------------------------------------------
 
 class _ToolActions:
-    """模拟 PluginActions，捕获所有 send() 调用的输出"""
 
     def __init__(self):
         self._responses: list[str] = []
 
     async def send(self, **kwargs):
-        """捕获文本/图片输出"""
-        # 优先处理 markdown
         markdown = kwargs.get('markdown')
         if markdown:
             self._responses.append(str(markdown))
@@ -416,7 +383,6 @@ class _ToolActions:
 
     async def send_file(self, url: str = None, file_type: int = 1,
                         file=None, filename: str = None):
-        """捕获文件发送"""
         if filename:
             self._responses.append(f"[图片已发送: {filename}]")
         elif url:
@@ -425,7 +391,6 @@ class _ToolActions:
             self._responses.append("[图片已发送]")
 
     async def send_local_file(self, file_path: str, file_type: int = 1):
-        """捕获本地文件发送"""
         import os
         self._responses.append(f"[文件已发送: {os.path.basename(file_path)}]")
 
@@ -443,15 +408,11 @@ class _ToolActions:
         return str(msg) if msg else ''
 
     def get_response(self) -> str:
-        """获取所有捕获的响应文本"""
         return '\n'.join(self._responses) if self._responses else '(无输出)'
 
 
-# ---------------------------------------------------------------------------
-# 工具执行器
-# ---------------------------------------------------------------------------
 
-MAX_TOOL_ITERATIONS = 5  # 最大工具调用轮次，防止死循环
+MAX_TOOL_ITERATIONS = 5
 
 
 async def execute_tool(
@@ -462,13 +423,11 @@ async def execute_tool(
     config: Any,
     client: Any,
 ) -> str:
-    """执行一个工具调用，返回捕获的插件输出文本"""
     _init_handlers()
 
     if tool_name not in _TOOL_HANDLERS:
         return f"错误：未知工具 '{tool_name}'"
 
-    # 权限检查
     permission = TOOL_PERMISSIONS.get(tool_name, "root")
     if permission == "root" and user_id not in root_users:
         return "权限不足：此操作需要管理员权限"
@@ -476,7 +435,6 @@ async def execute_tool(
     module, msg_builder = _TOOL_HANDLERS[tool_name]
     msg = msg_builder(arguments)
 
-    # 创建 mock event
     event = type('ToolEvent', (), {
         'message': msg,
         'user_id': user_id,
@@ -486,10 +444,8 @@ async def execute_tool(
         'self_id': None,
     })()
 
-    # 创建 mock actions
     actions = _ToolActions()
 
-    # 构建 kwargs（兼容所有插件的参数需求，event/actions 作为位置参数传递）
     kwargs = {
         'order': msg,
         'ROOT_User': root_users,
@@ -501,7 +457,6 @@ async def execute_tool(
 
     try:
         result = await module.on_message(event, actions, **kwargs)
-        # 如果插件返回 False，表示未匹配到命令
         if result is False:
             return f"命令格式错误：{msg}，请检查参数是否正确"
     except Exception as e:
@@ -511,9 +466,6 @@ async def execute_tool(
     return actions.get_response()
 
 
-# ---------------------------------------------------------------------------
-# 系统提示词增强
-# ---------------------------------------------------------------------------
 
 FUNCTION_CALLING_SYSTEM_PROMPT = """
 你是一个功能丰富的 QQ 机器人助手。你可以使用以下工具来帮助用户：

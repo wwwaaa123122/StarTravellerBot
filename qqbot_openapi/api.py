@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""开放平台 REST API 客户端
-
-提供群聊 / C2C 单聊的消息发送、文件发送与消息撤回接口。
-方法签名与旧版 botpy 的 ``self.api`` 保持兼容。
-"""
 
 from typing import Any, Dict, List, Optional, Union
 
@@ -17,11 +12,6 @@ _MSG_TYPE_MARKDOWN = 2
 
 
 def _resolve_file_source(value: str) -> Dict[str, str]:
-    """识别文件/图片输入是 URL 还是 base64，返回 files 接口对应字段
-
-    - ``http(s)://`` 开头 -> 公网地址，走 ``url`` 字段
-    - ``data:<mime>;base64,<data>`` 或纯 base64 字符串 -> 走 ``file_data`` 字段
-    """
     value = (value or "").strip()
     if value.startswith(("http://", "https://")):
         return {"url": value}
@@ -31,21 +21,16 @@ def _resolve_file_source(value: str) -> Dict[str, str]:
 
 
 def _build_markdown(markdown: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
-    """markdown 参数兼容 str 与 dict 两种传法"""
     if isinstance(markdown, str):
         return {"content": markdown}
     return markdown
 
 
 class API:
-    """QQ 开放平台 API"""
 
     def __init__(self, http_client: HTTPClient):
         self._http = http_client
 
-    # ------------------------------------------------------------------
-    # 群聊消息
-    # ------------------------------------------------------------------
     async def post_group_message(
         self,
         group_openid: str,
@@ -59,7 +44,6 @@ class API:
         message_reference: Optional[Dict[str, Any]] = None,
         msg_elements: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """发送群聊消息（POST /v2/groups/{group_openid}/messages）"""
         payload: Dict[str, Any] = {
             "group_openid": group_openid,
             "msg_type": msg_type,
@@ -84,9 +68,6 @@ class API:
             json=payload,
         )
 
-    # ------------------------------------------------------------------
-    # C2C 单聊消息
-    # ------------------------------------------------------------------
     async def post_c2c_message(
         self,
         openid: str,
@@ -99,7 +80,6 @@ class API:
         message_reference: Optional[Dict[str, Any]] = None,
         msg_elements: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """发送 C2C 单聊消息（POST /v2/users/{openid}/messages）"""
         payload: Dict[str, Any] = {
             "openid": openid,
             "msg_type": msg_type,
@@ -122,9 +102,6 @@ class API:
             json=payload,
         )
 
-    # ------------------------------------------------------------------
-    # 频道消息
-    # ------------------------------------------------------------------
     async def post_channel_message(
         self,
         channel_id: str,
@@ -139,11 +116,6 @@ class API:
         msg_elements: Optional[List[Dict[str, Any]]] = None,
         image: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """发送频道子频道消息（POST /channels/{channel_id}/messages）
-
-        用于回复 AT_MESSAGE_CREATE / DIRECT_MESSAGE_CREATE 等频道消息，
-        ``msg_id`` 取事件消息的 ``id`` 即可实现被动回复。
-        """
         payload: Dict[str, Any] = {
             "msg_type": msg_type,
             "msg_id": msg_id,
@@ -169,9 +141,6 @@ class API:
             json=payload,
         )
 
-    # ------------------------------------------------------------------
-    # 文件发送
-    # ------------------------------------------------------------------
     async def post_group_file(
         self,
         group_openid: str,
@@ -179,12 +148,6 @@ class API:
         url: str,
         srv_send_msg: bool = True,
     ) -> Dict[str, Any]:
-        """发送群聊富媒体文件（POST /v2/groups/{group_openid}/files）
-
-        ``url`` 参数自动识别来源：
-        - 公网文件地址（``http(s)://``） -> ``url`` 字段
-        - base64 数据（``data:image/png;base64,...`` 或纯 base64 字符串） -> ``file_data`` 字段
-        """
         payload = {"file_type": file_type, "srv_send_msg": srv_send_msg}
         payload.update(_resolve_file_source(url))
         return await self._http.request(
@@ -199,12 +162,6 @@ class API:
         url: str,
         srv_send_msg: bool = True,
     ) -> Dict[str, Any]:
-        """发送 C2C 单聊富媒体文件（POST /v2/users/{openid}/files）
-
-        ``url`` 参数自动识别来源：
-        - 公网文件地址（``http(s)://``） -> ``url`` 字段
-        - base64 数据（``data:image/png;base64,...`` 或纯 base64 字符串） -> ``file_data`` 字段
-        """
         payload = {"file_type": file_type, "srv_send_msg": srv_send_msg}
         payload.update(_resolve_file_source(url))
         return await self._http.request(
@@ -212,12 +169,8 @@ class API:
             json=payload,
         )
 
-    # ------------------------------------------------------------------
-    # 消息撤回（主动 API）
-    # ------------------------------------------------------------------
     async def delete_message(self, message_id: str, openid: Optional[str] = None,
                              group_openid: Optional[str] = None) -> Dict[str, Any]:
-        """撤回消息（仅沙箱/支持范围内可用，需指定 group_openid 或 openid）"""
         if group_openid:
             return await self._http.request(
                 Route("POST", "/v2/groups/{group_openid}/messages/{message_id}/recall",
@@ -232,6 +185,5 @@ class API:
             )
         raise ValueError("delete_message 需要 group_openid 或 openid")
 
-    # 兼容旧 botpy 命名
     post_group_recall = delete_message
     post_c2c_recall = delete_message

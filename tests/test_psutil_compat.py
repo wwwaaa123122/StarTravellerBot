@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""psutil_compat 纯 Python 实现测试（强制纯模式，覆盖 Termux/Android 场景）。"""
 
 import importlib
 import os

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""AI CostTracker 费用统计测试。"""
 
 import json
 
@@ -16,7 +15,6 @@ def test_cost_tracker_record_and_summary(tmp_path):
     assert summary["errors"] == 1
     assert summary["error_rate"] == 0.5
     assert summary["avg_latency"] == 1.0
-    # 费用 = 200/1M*1 + 100/1M*2
     assert summary["cost"] == 0.0004
 
 
@@ -26,6 +24,5 @@ def test_cost_tracker_persists(tmp_path):
     data = json.loads((tmp_path / "ai_stats.json").read_text(encoding="utf-8"))
     assert data["requests"] == 1
     assert data["prompt_tokens"] == 1000
-    # 新实例读取同一文件
     tracker2 = CostTracker(data_dir=str(tmp_path))
     assert tracker2.summary()["requests"] == 1

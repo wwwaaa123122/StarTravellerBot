@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""消息去重测试：MessageDedup 与 Dispatcher 级去重。"""
 
 import logging
 import types
@@ -30,7 +29,6 @@ def test_dedup_max_items():
     dedup = MessageDedup(window=60, max_items=3)
     for i in range(4):
         dedup.is_duplicate(f"m{i}")
-    # 最早一条被挤出窗口
     assert dedup.is_duplicate("m0") is False
     assert dedup.is_duplicate("m3") is True
 
@@ -105,5 +103,5 @@ async def test_dispatcher_dedups_same_message_id():
     await dispatcher.route(_msg("same-id"), SCENE_C2C)
     assert client.ping_hits == 1
     await dispatcher.route(_msg("same-id"), SCENE_C2C)
-    assert client.ping_hits == 1  # 第二次被去重
+    assert client.ping_hits == 1
     assert client.stats.messages == 1

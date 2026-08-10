@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Kick 直播监控插件 - 统一版
-- 多主播开播/下播提醒（APScheduler IntervalTrigger）
-- 支持群聊和私聊通知（Markdown）
-- 完整的命令系统（add/del/list/check/start/stop/status/interval/group/user）
-"""
 
 import os
 import json
@@ -20,24 +14,18 @@ from Tools.scheduler import get_client
 
 _logger = logging.getLogger("KickPlugin")
 
-# 北京时间 (UTC+8)；显式传入避免 Termux 缺 tzdata 时 IntervalTrigger 的 get_localzone 失败
 BJT = timezone(timedelta(hours=8))
 
-# 配置文件路径
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(BASE_DIR, "plugins", "kick_config.json")
 LOG_FILE = os.path.join(BASE_DIR, "data", "kick.log")
 
-# 已通知过的主播集合（避免重复通知）
 _notified: set[str] = set()
-# 调度器引用（用于动态调整间隔）
 _scheduler = None
-# 当前检查间隔缓存（用于 reschedule 时判断）
 _current_interval = 0
 
 
 def _load_config() -> dict:
-    """加载配置"""
     default_config = {
         "streamers": [],
         "notify_groups": [],
@@ -48,7 +36,6 @@ def _load_config() -> dict:
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-                # 兼容旧配置（无 notify_users 字段）
                 cfg.setdefault("notify_users", [])
                 return cfg
         except Exception as e:
@@ -57,7 +44,6 @@ def _load_config() -> dict:
 
 
 def _save_config(config: dict) -> bool:
-    """保存配置"""
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
@@ -68,7 +54,6 @@ def _save_config(config: dict) -> bool:
 
 
 def _write_log(action: str, detail: str, user_id: str = "", group_id: str = ""):
-    """写入操作日志"""
     try:
         os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -84,7 +69,6 @@ def _write_log(action: str, detail: str, user_id: str = "", group_id: str = ""):
 
 
 async def _check_live(channel: str) -> tuple[bool, Optional[dict]]:
-    """异步检查 Kick 主播直播状态，返回 (is_error, livestream_dict_or_None)"""
     url = f"https://api.kick.com/private/v1/channels/{channel}/livestream"
     headers = {
         "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36",
@@ -105,7 +89,6 @@ async def _check_live(channel: str) -> tuple[bool, Optional[dict]]:
 
 
 def _format_live_msg(channel: str, live_info: dict) -> str:
-    """格式化开播通知（Markdown）"""
     meta = live_info.get("metadata", {})
     title = meta.get("title", "未知标题")
     category = meta.get("category", {}).get("name", "未知分类")
@@ -121,13 +104,11 @@ def _format_live_msg(channel: str, live_info: dict) -> str:
 
 
 def _format_offline_msg(channel: str) -> str:
-    """格式化下播通知（Markdown）"""
     url = f"https://kick.com/{channel}"
     return f"## ⚫ {channel} 下播了\n\n- **链接**: {url}"
 
 
 def _format_live_text(channel: str, live_info: dict) -> str:
-    """格式化直播信息（纯文本，用于命令查询）"""
     title = live_info.get("metadata", {}).get("title", "未知")
     category = live_info.get("metadata", {}).get("category", {}).get("name", "未知")
     viewers = live_info.get("viewers_count", 0)
@@ -141,7 +122,6 @@ def _format_live_text(channel: str, live_info: dict) -> str:
 
 
 async def _send_notification(client, message: str, notify_groups: list, notify_users: list):
-    """发送通知到群聊和私聊"""
     for group_openid in notify_groups:
         try:
             await client.api.post_group_message(
@@ -168,7 +148,6 @@ async def _send_notification(client, message: str, notify_groups: list, notify_u
 
 
 async def _do_monitor_check(client):
-    """执行一次监控检查"""
     global _notified
 
     config = _load_config()
@@ -201,14 +180,12 @@ async def _do_monitor_check(client):
                 _write_log("下播", channel)
                 _logger.info(f"[kick] {channel} 下播了")
 
-    # 清理已移除主播的通知状态
     stale = _notified - set(streamers)
     for ch in stale:
         _notified.discard(ch)
 
 
 def _init_check(client):
-    """初始化检查：记录当前状态，不发送通知"""
     import asyncio
 
     async def _do():
@@ -228,7 +205,6 @@ def _init_check(client):
 
 
 async def _monitor_job():
-    """APScheduler 定时任务：执行监控检查并动态调整间隔"""
     global _scheduler
 
     client = get_client()
@@ -237,7 +213,6 @@ async def _monitor_job():
 
     await _do_monitor_check(client)
 
-    # 动态调整间隔（如果配置变更）
     config = _load_config()
     new_interval = config.get("check_interval", 60)
     global _current_interval
@@ -251,24 +226,21 @@ async def _monitor_job():
 
 
 def register_scheduled_jobs(scheduler):
-    """注册定时任务到 APScheduler"""
     global _scheduler, _current_interval
 
     _scheduler = scheduler
     config = _load_config()
     _current_interval = config.get("check_interval", 60)
 
-    # 初始化检查：启动后 5 秒执行一次，记录当前状态但不通知
     scheduler.add_job(
         lambda: _init_check(get_client()),
         trigger=None,
         id="kick_init_check",
         name="Kick 初始化状态检查",
         replace_existing=True,
-        next_run_time=None,  # 下面手动设置
+        next_run_time=None,
     )
 
-    # 监控任务
     scheduler.add_job(
         _monitor_job,
         IntervalTrigger(seconds=_current_interval, timezone=BJT),
@@ -280,14 +252,11 @@ def register_scheduled_jobs(scheduler):
     _logger.info(f"[kick] 监控任务已注册，间隔 {_current_interval}s")
 
 
-# ==================== 插件接口 ====================
-
 TRIGGER_KEYWORD = "kick"
 HELP_MESSAGE = "kick <主播名> -> 查询 Kick 主播直播状态 | kick help 查看更多"
 
 
 async def on_message(ctx):
-    """插件命令处理入口"""
     event = ctx.event
     actions = ctx.actions
     kwargs = ctx.kwargs
@@ -304,7 +273,6 @@ async def on_message(ctx):
     config = _load_config()
     client = kwargs.get("client")
 
-    # 帮助信息
     if cmd in ("help", "帮助"):
         help_text = (
             "📺 Kick 直播提醒命令:\n"
@@ -326,7 +294,6 @@ async def on_message(ctx):
         await actions.send(content=help_text)
         return True
 
-    # 查询单个主播
     if cmd not in ("add", "del", "delete", "remove", "list", "ls", "check",
                     "group", "user", "start", "stop", "status", "interval", "help", "帮助"):
         channel = cmd.lower()
@@ -349,7 +316,6 @@ async def on_message(ctx):
             await actions.send(content=f"⚫ {channel} 未在直播\n链接: https://kick.com/{channel}")
         return True
 
-    # 添加监控主播
     if cmd == "add":
         if not args:
             await actions.send(content="请指定主播名，如: kick add xctraveller")
@@ -369,7 +335,6 @@ async def on_message(ctx):
             await actions.send(content=f"⚠️ {channel} 已在监控列表中")
         return True
 
-    # 删除监控主播
     if cmd in ("del", "delete", "remove"):
         if not args:
             await actions.send(content="请指定主播名，如: kick del xctraveller")
@@ -392,7 +357,6 @@ async def on_message(ctx):
             await actions.send(content=f"⚠️ {channel} 不在监控列表中")
         return True
 
-    # 查看监控列表
     if cmd in ("list", "ls"):
         streamers = config.get("streamers", [])
         notify_groups = config.get("notify_groups", [])
@@ -411,14 +375,12 @@ async def on_message(ctx):
         text_parts.append(f"👤 通知用户: {len(notify_users)} 个")
         text_parts.append(f"⏱️ 检查间隔: {config.get('check_interval', 60)} 秒")
 
-        # 监控状态
         job = _scheduler.get_job("kick_monitor") if _scheduler else None
         running = job is not None
         text_parts.append(f"🔄 监控状态: {'运行中' if running else '已停止'}")
         await actions.send(content="\n".join(text_parts))
         return True
 
-    # 检查所有主播状态
     if cmd == "check":
         streamers = config.get("streamers", [])
 
@@ -452,7 +414,6 @@ async def on_message(ctx):
         await actions.send(content="\n".join(text_parts))
         return True
 
-    # 管理通知群聊
     if cmd == "group":
         subcmd = args.split(maxsplit=1)[0].lower() if args else ""
         current_group = str(getattr(event, 'group_id', ''))
@@ -490,7 +451,6 @@ async def on_message(ctx):
             await actions.send(content="用法:\n• kick group add — 添加当前群\n• kick group del — 删除当前群")
         return True
 
-    # 管理通知用户
     if cmd == "user":
         subcmd = args.split(maxsplit=1)[0].lower() if args else ""
         user_id = str(getattr(event, 'user_id', ''))
@@ -527,7 +487,6 @@ async def on_message(ctx):
             await actions.send(content="用法:\n• kick user add <用户ID> — 添加通知用户\n• kick user del <用户ID> — 删除通知用户")
         return True
 
-    # 启动监控
     if cmd == "start":
         user_id = str(getattr(event, 'user_id', ''))
         group_id = str(getattr(event, 'group_id', ''))
@@ -557,7 +516,6 @@ async def on_message(ctx):
             await actions.send(content="❌ 调度器未初始化，请重启机器人")
         return True
 
-    # 停止监控
     if cmd == "stop":
         user_id = str(getattr(event, 'user_id', ''))
         group_id = str(getattr(event, 'group_id', ''))
@@ -574,7 +532,6 @@ async def on_message(ctx):
             await actions.send(content="⚠️ 监控未在运行")
         return True
 
-    # 查看状态
     if cmd == "status":
         job = _scheduler.get_job("kick_monitor") if _scheduler else None
         running = job is not None
@@ -591,7 +548,6 @@ async def on_message(ctx):
         await actions.send(content=status_text)
         return True
 
-    # 设置检查间隔
     if cmd == "interval":
         try:
             interval = int(args.strip())

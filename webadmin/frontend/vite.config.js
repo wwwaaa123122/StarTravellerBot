@@ -2,8 +2,6 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { fileURLToPath, URL } from "node:url";
 
-// 仅在构建时把重量级依赖 external 掉，走 CDN 全局变量
-// 关键：format 必须为 iife，否则 Rollup output.globals 在 ESM 格式下不生效
 function cdnExternalConfig() {
   let isBuild = false;
   return {
@@ -29,7 +27,6 @@ function cdnExternalConfig() {
         };
       }
     },
-    // pre: 注入 CDN 资源到 <head> 最前面
     transformIndexHtml: {
       order: "pre",
       handler(html) {
@@ -66,8 +63,6 @@ function cdnExternalConfig() {
   };
 }
 
-// post: 移除 type="module" crossorigin，并把 app 脚本从 <head> 移到 </body> 之前
-// （IIFE 立即执行，必须等 #app 挂载点存在后才能 mount）
 function cdnExternalFixScript() {
   return {
     name: "cdn-external-fix-script",

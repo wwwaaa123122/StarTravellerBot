@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-"""AI Provider 抽象：OpenAI 兼容 / Gemini 统一接口。
-
-接入新模型只需实现 AIProvider.chat()，核心不感知具体厂商。
-"""
 
 import time
 from abc import ABC, abstractmethod
@@ -10,7 +6,6 @@ from typing import Any, Dict, List, Optional
 
 
 class AIProvider(ABC):
-    """模型调用抽象；last_usage 保存最近一次调用的 token 用量。"""
 
     name: str = "base"
 
@@ -22,14 +17,13 @@ class AIProvider(ABC):
 
     @abstractmethod
     async def chat(self, messages: List[dict], tools: Optional[List[dict]] = None, **kwargs) -> Optional[Dict[str, Any]]:
-        """调用模型，返回 OpenAI 风格 choice（含 message/tool_calls），失败返回 None。"""
+        pass
 
     def get_usage(self) -> dict:
         return self.last_usage
 
 
 class OpenAICompatibleProvider(AIProvider):
-    """DeepSeek / OpenAI / SiliconFlow / Moonshot 等所有 OpenAI 兼容接口。"""
 
     name = "openai-compatible"
 
@@ -75,7 +69,6 @@ class OpenAICompatibleProvider(AIProvider):
 
 
 class GeminiProvider(AIProvider):
-    """Google Gemini（google.generativeai 官方库）。"""
 
     name = "gemini"
 
@@ -98,7 +91,6 @@ class GeminiProvider(AIProvider):
 
 
 def create_provider(mode: str, config: dict, http_client, logger) -> AIProvider:
-    """按模式创建 provider；未知模式回退 OpenAI 兼容。"""
     if mode == "GoogleGemini":
         return GeminiProvider(config, http_client, logger)
     return OpenAICompatibleProvider(config, http_client, logger)

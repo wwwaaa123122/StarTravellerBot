@@ -37,57 +37,64 @@ pip install -r requirements.txt
 
 ### 3. 配置
 
-在项目根目录创建 `config.json`：
+复制 `.env.example` 为 `.env` 并填入真实值：
 
-```json
-{
-  "OpenQQ": {
-    "appid": "你的AppID",
-    "secret": "你的AppSecret",
-    "sandbox": true
-  },
-  "Others": {
-    "bot_name": "星辰旅人",
-    "bot_name_en": "XCLR",
-    "reminder": "#",
-    "ROOT_User": ["你的QQ管理员OpenID"],
-    "default_mode": "Ds",
-    "allow_ai": true,
-    "deepseek_key": "sk-xxxxxxxxxxxx",
-    "gemini_key": "AIxxxxxxxxxxxx",
-    "ai_base_url": "https://api.deepseek.com",
-    "ai_model": "deepseek-v4-flash",
-    "ai_max_tokens": 2000,
-    "ai_temperature": 0.7
-  },
-  "scheduled_send": {
-    "admin_user": "管理员OpenID",
-    "notify_groups": ["群OpenID1"],
-    "send_time": "06:00",
-    "default_content": "早生蚝"
-  },
-  "Log_level": "INFO"
-}
+```bash
+cp .env.example .env
+```
+
+```env
+# QQ 开放平台凭证（必填）
+STAR_QO_APPID=你的AppID
+STAR_QO_SECRET=你的AppSecret
+# STAR_QO_SANDBOX=true
+
+# AI API 密钥（至少配置一个）
+STAR_DEEPSEEK_KEY=你的DeepSeek密钥
+# STAR_GEMINI_KEY=你的Gemini密钥
+
+# 机器人基础信息
+# STAR_BOT_NAME=星辰旅人
+# STAR_BOT_REMINDER=#
+# STAR_BOT_ROOT_USER=你的QQ管理员OpenID
+# STAR_BOT_DEFAULT_MODE=Ds
+# STAR_BOT_ALLOW_AI=true
+
+# AI 可选配置
+# STAR_AI_BASE_URL=https://api.deepseek.com
+# STAR_AI_MODEL=deepseek-v4-flash
+# STAR_AI_MAX_TOKENS=2000
+# STAR_AI_TEMPERATURE=0.7
+
+# Web 管理后台（密码必填）
+STAR_TRAVELLER_ADMIN_PASSWORD=你的强密码
+
+# 定时群发
+# STAR_SCHEDULED_SEND_TIME=06:00
+# STAR_SCHEDULED_SEND_CONTENT=早生蚝
+# STAR_SCHEDULED_SEND_GROUPS=群OpenID1
+# STAR_SCHEDULED_SEND_ADMIN=管理员OpenID
 ```
 
 | 配置项 | 说明 | 默认值 |
 | :--- | :--- | :---: |
-| `OpenQQ.appid` | QQ 开放平台 AppID | — |
-| `OpenQQ.secret` | QQ 开放平台 AppSecret | — |
-| `OpenQQ.sandbox` | 是否沙箱环境 | `true` |
-| `Others.bot_name` | 机器人名称 | `星辰旅人` |
-| `Others.reminder` | AI 对话触发前缀 | `#` |
-| `Others.ROOT_User` | 管理员 OpenID 列表 | `[]` |
-| `Others.default_mode` | AI 模型模式 (`Ds` / `GoogleGemini`) | `Ds` |
-| `Others.allow_ai` | 是否开启 AI 对话 | `true` |
-| `Others.deepseek_key` | DeepSeek API Key | — |
-| `Others.gemini_key` | Google Gemini API Key | — |
-| `Others.ai_base_url` | 兼容 OpenAI 格式的 API 地址 | `https://api.deepseek.com` |
-| `Others.ai_model` | 模型名称 | `deepseek-v4-flash` |
+| `STAR_QO_APPID` | QQ 开放平台 AppID | — |
+| `STAR_QO_SECRET` | QQ 开放平台 AppSecret | — |
+| `STAR_QO_SANDBOX` | 是否沙箱环境 | `true` |
+| `STAR_BOT_NAME` | 机器人名称 | `星辰旅人` |
+| `STAR_BOT_REMINDER` | AI 对话触发前缀 | `#` |
+| `STAR_BOT_ROOT_USER` | 管理员 OpenID 列表（逗号分隔） | 空 |
+| `STAR_BOT_DEFAULT_MODE` | AI 模型模式 (`Ds` / `GoogleGemini`) | `Ds` |
+| `STAR_BOT_ALLOW_AI` | 是否开启 AI 对话 | `true` |
+| `STAR_DEEPSEEK_KEY` | DeepSeek API Key | — |
+| `STAR_GEMINI_KEY` | Google Gemini API Key | — |
+| `STAR_AI_BASE_URL` | 兼容 OpenAI 格式的 API 地址 | `https://api.deepseek.com` |
+| `STAR_AI_MODEL` | 模型名称 | `deepseek-v4-flash` |
+| `STAR_SCHEDULED_SEND_*` | 定时群发（时间/内容/群/管理员/开关） | 见 `.env.example` |
 
 ::: tip
-`deepseek_key` 和 `gemini_key` 二选一即可，通过 `default_mode` 切换。
-`ai_base_url` 和 `ai_model` 仅在使用 DeepSeek 模式时生效。
+`STAR_DEEPSEEK_KEY` 和 `STAR_GEMINI_KEY` 二选一即可，通过 `STAR_BOT_DEFAULT_MODE` 切换。
+`STAR_AI_BASE_URL` 和 `STAR_AI_MODEL` 仅在使用 DeepSeek 模式时生效。
 :::
 
 ## 启动

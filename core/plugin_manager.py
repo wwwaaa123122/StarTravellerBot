@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""插件管理器：扫描/注册/匹配/执行 plugins/ 下的插件，兼容旧版 kwargs 注入 API。"""
 
 import importlib.util
 import inspect
@@ -24,7 +23,6 @@ PLUGIN_CATEGORIES = [
 
 
 class PluginManager:
-    """插件加载与执行；client 用于消息发送与 kwargs 注入。"""
 
     def __init__(self, client):
         self.client = client
@@ -52,7 +50,6 @@ class PluginManager:
         if not callable(on_message):
             return False
 
-        # 优先 TRIGGER_KEYWORDS（多关键字），兼容旧拼写 TRIGGHT_KEYWORDS / TRIGGHT_KEYWORD
         keywords = getattr(module, 'TRIGGER_KEYWORDS', None) or getattr(module, 'TRIGGHT_KEYWORDS', None)
         if keywords:
             keywords = [str(k).strip() for k in keywords if str(k).strip()]
@@ -93,7 +90,6 @@ class PluginManager:
             self.logger.warning(f"插件目录不存在: {plugin_dir}")
             return
 
-        # webadmin 开关：data/plugins_enabled.json（缺失视为启用）
         if enabled_map is None:
             enabled_map = self._read_enabled_map()
 
@@ -130,11 +126,9 @@ class PluginManager:
         return {}
 
     def reload(self, plugin_dir: Optional[str] = None):
-        """热重载：清空并重新加载全部插件（含定时任务）。"""
         self.load_plugins(plugin_dir=plugin_dir)
 
     async def try_plugins(self, message: Any, order: str, skip_plugins: Optional[set] = None) -> bool:
-        """按关键字匹配并执行插件，返回是否有插件处理了消息。"""
         skip_plugins = skip_plugins or set()
         order = order.strip()
         if not order:
@@ -185,7 +179,6 @@ class PluginManager:
         lines.append(f"> 📝 版本: **{version_name}**")
         return "\n".join(lines)
 
-    # ---------------------------------------------------------------- 兼容层
 
     def create_compat_objects(self):
         class FakeManager:
@@ -256,7 +249,6 @@ class PluginManager:
 
             async def send_file(self, url: Optional[str] = None, file_type: int = 1,
                                 file=None, filename: Optional[str] = None):
-                """发送文件（网络URL 或 BytesIO 本地文件）"""
                 try:
                     if file is not None and hasattr(file, 'read'):
                         data = file.read()
@@ -287,7 +279,6 @@ class PluginManager:
                     self._client.logger.error(f"发送文件失败: {e}")
 
             async def send_local_file(self, file_path: str, file_type: int = 1):
-                """发送本地文件（base64 编码直接上传）"""
                 try:
                     with open(file_path, "rb") as f:
                         file_b64 = base64.b64encode(f.read()).decode("utf-8")
@@ -385,12 +376,10 @@ class PluginManager:
         }
 
     def build_context(self, plugin: dict, message: Any, order: str):
-        """新 API：构造 PluginContext。"""
         compat = self._build_compat(message, order)
         return PluginContext(self.client, message, order, compat['event'], compat['actions'], compat)
 
     def build_kwargs(self, plugin: dict, message: Any, order: str) -> dict:
-        """旧 API：按签名过滤 kwargs（含 **kwargs 全量注入）。"""
         available = self._build_compat(message, order)
         sig = inspect.signature(plugin['on_message'])
         kwargs = {name: available[name] for name in sig.parameters if name in available}
@@ -401,7 +390,6 @@ class PluginManager:
 
     @staticmethod
     def is_new_api(plugin: dict) -> bool:
-        """新 API 判定：唯一参数名为 ctx/context。"""
         params = list(inspect.signature(plugin['on_message']).parameters.values())
         return len(params) == 1 and params[0].name in ('ctx', 'context')
 
