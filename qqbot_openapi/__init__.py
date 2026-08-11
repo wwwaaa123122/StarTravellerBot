@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = "0.1.0.dev3"
+__version__ = "0.1.0"
 
 from . import logging  # noqa: F401
 from .api import API  # noqa: F401
