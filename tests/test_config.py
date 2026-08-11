@@ -25,14 +25,12 @@ def test_defaults_without_file(tmp_path, _clean_env):
     cfg = load_config(str(tmp_path / "missing.env"))
     assert cfg["Others"]["bot_name"] == "星辰旅人"
     assert cfg["Others"]["ai_model"] == "deepseek-v4-flash"
-    assert cfg["OpenQQ"]["sandbox"] is True
     assert cfg["webadmin"]["port"] == 8765
 
 
 def test_load_from_env_file(tmp_path, _clean_env):
     path = _write_env(tmp_path, (
         "STAR_QO_APPID=123\n"
-        "STAR_QO_SANDBOX=false\n"
         "STAR_BOT_NAME=测试机器人\n"
         "STAR_BOT_ROOT_USER=u1,u2\n"
         "STAR_BLACK_LIST=evil1, evil2\n"
@@ -40,7 +38,6 @@ def test_load_from_env_file(tmp_path, _clean_env):
     ))
     cfg = load_config(path)
     assert cfg["OpenQQ"]["appid"] == "123"
-    assert cfg["OpenQQ"]["sandbox"] is False
     assert cfg["Others"]["bot_name"] == "测试机器人"
     assert cfg["Others"]["ROOT_User"] == ["u1", "u2"]
     assert cfg["black_list"] == ["evil1", "evil2"]

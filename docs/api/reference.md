@@ -35,11 +35,10 @@ class MyBot(Client):
         await message.reply(content="你好！")
 
 
-client = MyBot(intents=intents, is_sandbox=True)
+client = MyBot(intents=intents)
 client.run(appid="你的 AppID", secret="你的 AppSecret")
 ```
 
-- 沙箱调试：`is_sandbox=True`；正式环境传 `False`。
 - 消息回复统一使用 `message.reply(...)`，SDK 会自动识别群聊 / C2C / 频道场景。
 
 ## Client
@@ -49,13 +48,12 @@ client.run(appid="你的 AppID", secret="你的 AppSecret")
 ### 构造函数
 
 ```python
-Client(intents=None, is_sandbox=False, log_level=None, **kwargs)
+Client(intents=None, log_level=None, **kwargs)
 ```
 
 | 参数 | 类型 | 说明 |
 | :--- | :--- | :--- |
 | `intents` | `Intents` | 事件订阅集合，缺省为 `Intents()`（不订阅任何事件） |
-| `is_sandbox` | `bool` | 是否沙箱环境，默认 `False` |
 | `log_level` | `int` | 设置根日志级别（如 `logging.DEBUG`），可选 |
 
 ### 属性
@@ -63,7 +61,6 @@ Client(intents=None, is_sandbox=False, log_level=None, **kwargs)
 | 属性 | 类型 | 说明 |
 | :--- | :--- | :--- |
 | `intents` | `Intents` | 事件订阅集合 |
-| `is_sandbox` | `bool` | 沙箱标识 |
 | `api` | `API` | REST API 客户端（`start()` 后可用） |
 | `robot` | `Model` | 机器人自身信息（READY 后可用，如 `robot.id`、`robot.username`） |
 
@@ -80,7 +77,7 @@ def run(self, appid: str, secret: str) -> None
 **示例**
 
 ```python
-client = MyBot(intents=intents, is_sandbox=True)
+client = MyBot(intents=intents)
 client.run(appid="1234567890", secret="your-app-secret")
 ```
 
@@ -515,7 +512,7 @@ async def on_group_message_create(self, message):
 `qqbot_openapi.auth.AccessTokenManager` — 获取并自动刷新 AppAccessToken。首次调用 `get_access_token()` 时向 `/app/getAppAccessToken` 申请，过期前 60s 自动提前刷新。
 
 ```python
-AccessTokenManager(app_id, secret, sandbox=False, base_url=None, timeout=10.0)
+AccessTokenManager(app_id, secret, base_url=None, timeout=10.0)
 ```
 
 **示例**
@@ -523,7 +520,7 @@ AccessTokenManager(app_id, secret, sandbox=False, base_url=None, timeout=10.0)
 ```python
 from qqbot_openapi import AccessTokenManager
 
-manager = AccessTokenManager("APPID", "SECRET", sandbox=True)
+manager = AccessTokenManager("APPID", "SECRET")
 token = await manager.get_access_token()   # 返回有效 token，必要时自动刷新
 # 强制刷新
 new_token = await manager.refresh()
@@ -534,10 +531,8 @@ await manager.close()
 
 | 常量 | 值 |
 | :--- | :--- |
-| `API_BASE_PROD` | `https://api.sgroup.qq.com` |
-| `API_BASE_SANDBOX` | `https://sandbox.api.sgroup.qq.com` |
-| `WSS_BASE_PROD` | `wss://api.sgroup.qq.com/websocket` |
-| `WSS_BASE_SANDBOX` | `wss://sandbox.api.sgroup.qq.com/websocket` |
+| `API_BASE_PROD` | `https://api.bot.qq.com` |
+| `WSS_BASE_PROD` | `wss://api.bot.qq.com/websocket` |
 
 ## HTTPClient / Route
 
@@ -555,7 +550,7 @@ HTTPClient(base_url, token_manager, timeout=60.0)
 from qqbot_openapi import AccessTokenManager, HTTPClient, Route
 
 manager = AccessTokenManager("APPID", "SECRET")
-http = HTTPClient("https://api.sgroup.qq.com", manager)
+http = HTTPClient("https://api.bot.qq.com", manager)
 
 data = await http.request(
     Route("GET", "/v2/groups/{group_openid}/messages", group_openid="GROUP_OPENID"),

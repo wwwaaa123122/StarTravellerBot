@@ -45,7 +45,6 @@ def main():
     client = XCLRClient(
         config=settings.to_dict(),
         log_level=getattr(_logging, settings.log_level, 20),
-        is_sandbox=settings.qq.sandbox,
     )
 
     if settings.webadmin.enabled:

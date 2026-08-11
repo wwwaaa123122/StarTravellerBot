@@ -47,7 +47,6 @@ cp .env.example .env
 # QQ 开放平台凭证（必填）
 STAR_QO_APPID=你的AppID
 STAR_QO_SECRET=你的AppSecret
-# STAR_QO_SANDBOX=true
 
 # AI API 密钥（至少配置一个）
 STAR_DEEPSEEK_KEY=你的DeepSeek密钥
@@ -80,7 +79,6 @@ STAR_TRAVELLER_ADMIN_PASSWORD=你的强密码
 | :--- | :--- | :---: |
 | `STAR_QO_APPID` | QQ 开放平台 AppID | — |
 | `STAR_QO_SECRET` | QQ 开放平台 AppSecret | — |
-| `STAR_QO_SANDBOX` | 是否沙箱环境 | `true` |
 | `STAR_BOT_NAME` | 机器人名称 | `星辰旅人` |
 | `STAR_BOT_REMINDER` | AI 对话触发前缀 | `#` |
 | `STAR_BOT_ROOT_USER` | 管理员 OpenID 列表（逗号分隔） | 空 |

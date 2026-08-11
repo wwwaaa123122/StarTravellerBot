@@ -508,7 +508,6 @@ def api_config():
     bot_info = {
         "name": cfg.get("bot_name") or cfg.get("Others", {}).get("bot_name"),
         "log_level": cfg.get("Log_level") or cfg.get("log_level"),
-        "sandbox": cfg.get("is_sandbox"),
         "openqq_appid": cfg.get("appid") or cfg.get("openqq", {}).get("appid"),
         "config_path": ENV_FILE,
     }

@@ -30,7 +30,6 @@ const configEntries = computed(() => Object.entries(cfg.value.config || {}));
 const cards = computed(() => [
   { label: "机器人名称", value: bi.value.name || "-", sub: "来自 .env", dot: "success" },
   { label: "运行状态", value: bot.value.running ? "运行中" : "未运行", sub: "PID " + (bot.value.pid || "-"), dot: bot.value.running ? "success" : "off" },
-  { label: "沙箱模式", value: bi.value.sandbox ? "是" : "否", sub: "is_sandbox", dot: "success" },
 ]);
 
 function fmtValue(v) {
@@ -59,10 +58,6 @@ function fmtValue(v) {
         <div class="detail-grid">
           <div class="detail-item"><span class="detail-key">bot_name</span><span class="detail-val">{{ esc(bi.name || "-") }}</span></div>
           <div class="detail-item"><span class="detail-key">log_level</span><span class="detail-val mono">{{ esc(bi.log_level || "-") }}</span></div>
-          <div class="detail-item">
-            <span class="detail-key">sandbox</span>
-            <span class="detail-val">{{ bi.sandbox === undefined ? "-" : bi.sandbox ? "true" : "false" }}</span>
-          </div>
           <div class="detail-item"><span class="detail-key">appid</span><span class="detail-val mono">{{ esc(bi.openqq_appid || "-") }}</span></div>
           <div class="detail-item"><span class="detail-key">config_path</span><span class="detail-val mono">{{ esc(bi.config_path || "-") }}</span></div>
           <div class="detail-item"><span class="detail-key">后端版本</span><span class="detail-val mono">{{ esc(cfg.version || "-") }}</span></div>

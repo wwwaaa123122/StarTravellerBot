@@ -19,11 +19,12 @@ async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (state.token) headers["Authorization"] = "Bearer " + state.token;
   const resp = await fetch(path, { ...options, headers });
+  const data = await resp.json().catch(() => ({}));
   if (resp.status === 401) {
+    if (path.endsWith("/api/login")) throw new Error(data.message || "密码错误");
     logout();
     throw new Error("登录已过期");
   }
-  const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(data.message || data.error || `HTTP ${resp.status}`);
   return data;
 }
@@ -323,7 +324,6 @@ async function renderConfig() {
     <div class="cards">
       ${card("🤖 机器人", esc(d.bot_info.name || "—"))}
       ${card("🛠 日志级别", esc(d.bot_info.log_level || "—"))}
-      ${card("🏗 沙箱模式", d.bot_info.sandbox === true ? "是" : "否")}
       ${card("📄 配置路径", esc(d.bot_info.config_path || "—"), "v" + d.version)}
     </div>
     <div class="section-title">config.json（敏感字段已掩码）</div>
@@ -351,5 +351,9 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#logout-btn").addEventListener("click", logout);
   document.querySelectorAll(".nav-item[data-tab]").forEach((b) =>
     b.addEventListener("click", () => switchTab(b.dataset.tab)));
-  if (state.token) enterApp();
+  if (state.token) {
+    enterApp();
+  } else {
+    $("#login-view").classList.remove("hidden");
+  }
 });

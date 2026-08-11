@@ -12,7 +12,6 @@ def _pick(cls, source: dict) -> dict:
 class QQSettings:
     appid: str = ""
     secret: str = ""
-    sandbox: bool = True
 
 
 @dataclass

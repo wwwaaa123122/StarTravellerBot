@@ -121,6 +121,10 @@ class Group(Model):
     pass
 
 
+class GroupJoinRequest(Model):
+    pass
+
+
 class FriendUser(Model):
     pass
 

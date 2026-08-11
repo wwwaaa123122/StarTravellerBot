@@ -5,7 +5,6 @@ DEFAULT_CONFIG = {
     "OpenQQ": {
         "appid": "",
         "secret": "",
-        "sandbox": True,
     },
     "Others": {
         "bot_name": "星辰旅人",
@@ -43,7 +42,6 @@ DEFAULT_CONFIG = {
 ENV_MAP = {
     "STAR_QO_APPID": ("OpenQQ", "appid"),
     "STAR_QO_SECRET": ("OpenQQ", "secret"),
-    "STAR_QO_SANDBOX": ("OpenQQ", "sandbox"),
     "STAR_DEEPSEEK_KEY": ("Others", "deepseek_key"),
     "STAR_GEMINI_KEY": ("Others", "gemini_key"),
     "STAR_OPENAI_KEY": ("Others", "openai_key"),
@@ -74,5 +72,5 @@ ENV_MAP = {
 
 _INT_KEYS = {"STAR_AI_MAX_TOKENS", "STAR_TRAVELLER_ADMIN_PORT"}
 _FLOAT_KEYS = {"STAR_AI_TEMPERATURE", "STAR_AI_PRICE_INPUT", "STAR_AI_PRICE_OUTPUT"}
-_BOOL_KEYS = {"STAR_QO_SANDBOX", "STAR_BOT_ALLOW_AI", "STAR_TRAVELLER_ADMIN_ENABLED", "STAR_SCHEDULED_SEND_ENABLED"}
+_BOOL_KEYS = {"STAR_BOT_ALLOW_AI", "STAR_TRAVELLER_ADMIN_ENABLED", "STAR_SCHEDULED_SEND_ENABLED"}
 _LIST_KEYS = {"STAR_BOT_ROOT_USER", "STAR_BLACK_LIST", "STAR_SCHEDULED_SEND_GROUPS"}

@@ -10,13 +10,11 @@ from .errors import AccessTokenError
 
 _log = logging.get_logger(__name__)
 
-API_BASE_PROD = "https://api.sgroup.qq.com"
-API_BASE_SANDBOX = "https://sandbox.api.sgroup.qq.com"
+API_BASE_PROD = "https://api.bot.qq.com"
 
-TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken"
+TOKEN_URL = "https://api.bot.qq.com/app/getAppAccessToken"
 
-WSS_BASE_PROD = "wss://api.sgroup.qq.com/websocket"
-WSS_BASE_SANDBOX = "wss://sandbox.api.sgroup.qq.com/websocket"
+WSS_BASE_PROD = "wss://api.bot.qq.com/websocket"
 
 _REFRESH_ADVANCE = 60
 
@@ -27,13 +25,12 @@ class AccessTokenManager:
         self,
         app_id: str,
         secret: str,
-        sandbox: bool = False,
         base_url: Optional[str] = None,
         timeout: float = 10.0,
     ):
         self._app_id = app_id
         self._secret = secret
-        self._base_url = (base_url or (API_BASE_SANDBOX if sandbox else API_BASE_PROD)).rstrip("/")
+        self._base_url = (base_url or API_BASE_PROD).rstrip("/")
         self._timeout = timeout
         self._session = httpx.AsyncClient(timeout=timeout)
         self._token: Optional[str] = None
