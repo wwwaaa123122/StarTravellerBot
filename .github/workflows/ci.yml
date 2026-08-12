@@ -22,13 +22,7 @@ jobs:
           pip install -e .
           pip install pytest pytest-asyncio apscheduler loguru flask
       - name: Run tests
-        run: |
-          pytest -q > /tmp/pytest_out.txt 2>&1 || {
-            echo "pytest exit=$?" >> "$GITHUB_STEP_SUMMARY"
-            tail -80 /tmp/pytest_out.txt >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          }
-          tail -5 /tmp/pytest_out.txt
+        run: python -m pytest -q
 
   lint:
     runs-on: ubuntu-latest
