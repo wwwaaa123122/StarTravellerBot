@@ -51,14 +51,21 @@ class API:
         message_reference: Optional[Dict[str, Any]] = None,
         msg_elements: Optional[List[Dict[str, Any]]] = None,
         force_verify_image_resource: Optional[bool] = None,
-    ) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
+        event_id: str | None = None,
+        media: dict[str, Any] | None = None,
+        is_wakeup: bool | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "group_openid": group_openid,
             "msg_type": msg_type,
             "msg_id": msg_id,
         }
         if msg_seq is not None:
             payload["msg_seq"] = msg_seq
+        if event_id is not None:
+            payload["event_id"] = event_id
+        if is_wakeup is not None:
+            payload["is_wakeup"] = is_wakeup
         if content is not None:
             payload["content"] = content
         if markdown is not None:
@@ -71,6 +78,8 @@ class API:
             payload["message_reference"] = message_reference
         if msg_elements is not None:
             payload["msg_elements"] = msg_elements
+        if media is not None:
+            payload["media"] = media
         return await self._http.request(
             Route("POST", "/v2/groups/{group_openid}/messages", group_openid=group_openid),
             json=payload,
@@ -88,12 +97,23 @@ class API:
         message_reference: Optional[Dict[str, Any]] = None,
         msg_elements: Optional[List[Dict[str, Any]]] = None,
         force_verify_image_resource: Optional[bool] = None,
-    ) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
+        msg_seq: int | None = None,
+        event_id: str | None = None,
+        media: dict[str, Any] | None = None,
+        is_wakeup: bool | None = None,
+        input_notify: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "openid": openid,
             "msg_type": msg_type,
             "msg_id": msg_id,
         }
+        if msg_seq is not None:
+            payload["msg_seq"] = msg_seq
+        if event_id is not None:
+            payload["event_id"] = event_id
+        if is_wakeup is not None:
+            payload["is_wakeup"] = is_wakeup
         if content is not None:
             payload["content"] = content
         if markdown is not None:
@@ -106,6 +126,10 @@ class API:
             payload["message_reference"] = message_reference
         if msg_elements is not None:
             payload["msg_elements"] = msg_elements
+        if media is not None:
+            payload["media"] = media
+        if input_notify is not None:
+            payload["input_notify"] = input_notify
         return await self._http.request(
             Route("POST", "/v2/users/{openid}/messages", openid=openid),
             json=payload,
@@ -154,11 +178,20 @@ class API:
         self,
         group_openid: str,
         file_type: int,
-        url: str,
+        url: str = "",
         srv_send_msg: bool = True,
-    ) -> Dict[str, Any]:
+        file_name: str | None = None,
+        upload_id: str | None = None,
+    ) -> dict[str, Any]:
         payload = {"file_type": file_type, "srv_send_msg": srv_send_msg}
-        payload.update(_resolve_file_source(url))
+        if upload_id is not None:
+            payload["upload_id"] = upload_id
+        else:
+            payload.update(_resolve_file_source(url))
+            if not (payload.get("url") or payload.get("file_data")):
+                raise ValueError("post_group_file 需要 url、file_data 或 upload_id")
+        if file_name is not None:
+            payload["file_name"] = file_name
         return await self._http.request(
             Route("POST", "/v2/groups/{group_openid}/files", group_openid=group_openid),
             json=payload,
@@ -168,11 +201,20 @@ class API:
         self,
         openid: str,
         file_type: int,
-        url: str,
+        url: str = "",
         srv_send_msg: bool = True,
-    ) -> Dict[str, Any]:
+        file_name: str | None = None,
+        upload_id: str | None = None,
+    ) -> dict[str, Any]:
         payload = {"file_type": file_type, "srv_send_msg": srv_send_msg}
-        payload.update(_resolve_file_source(url))
+        if upload_id is not None:
+            payload["upload_id"] = upload_id
+        else:
+            payload.update(_resolve_file_source(url))
+            if not (payload.get("url") or payload.get("file_data")):
+                raise ValueError("post_c2c_file 需要 url、file_data 或 upload_id")
+        if file_name is not None:
+            payload["file_name"] = file_name
         return await self._http.request(
             Route("POST", "/v2/users/{openid}/files", openid=openid),
             json=payload,
@@ -364,6 +406,164 @@ class API:
                 strategy_id=strategy_id,
             ),
             json=payload,
+        )
+
+    # ---- 流式消息（单聊，官方支持 AI 流式回复）----
+
+    async def post_stream_message(
+        self,
+        user_openid: str,
+        input_mode: str | None = None,
+        input_state: int | None = None,
+        index: int | None = None,
+        content_type: str | None = None,
+        content_raw: str | None = None,
+        event_id: str | None = None,
+        msg_id: str | None = None,
+        stream_msg_id: str | None = None,
+        msg_seq: int | None = None,
+        is_wakeup: bool | None = None,
+    ) -> dict[str, Any]:
+        """流式发送单聊消息，每个分片使用相同 stream_msg_id，index 从 0 递增。
+
+        - 首片不传 stream_msg_id，由服务端在响应 id 中返回，后续分片需携带。
+        - input_mode: append（默认，ContentRaw 拼接）或 replace（全量正文）。
+        - input_state: 1=生成中，10=生成结束。
+        - content_type: text 或 markdown。
+        - 被动回复用 msg_id 或 event_id（二选一），is_wakeup 声明互动召回消息。
+        """
+        payload: dict[str, Any] = {}
+        if input_mode is not None:
+            payload["input_mode"] = input_mode
+        if input_state is not None:
+            payload["input_state"] = input_state
+        if index is not None:
+            payload["index"] = index
+        if content_type is not None:
+            payload["content_type"] = content_type
+        if content_raw is not None:
+            payload["content_raw"] = content_raw
+        if event_id is not None:
+            payload["event_id"] = event_id
+        if msg_id is not None:
+            payload["msg_id"] = msg_id
+        if stream_msg_id is not None:
+            payload["stream_msg_id"] = stream_msg_id
+        if msg_seq is not None:
+            payload["msg_seq"] = msg_seq
+        if is_wakeup is not None:
+            payload["is_wakeup"] = is_wakeup
+        return await self._http.request(
+            Route("POST", "/v2/users/{user_openid}/stream_messages", user_openid=user_openid),
+            json=payload,
+        )
+
+    # ---- 富媒体分片上传（upload_prepare -> 逐片 PUT 预签名 URL -> upload_part_finish -> files 合并）----
+
+    async def post_c2c_upload_prepare(
+        self,
+        openid: str,
+        file_type: int,
+        file_size: int | str,
+        file_name: str,
+        md5: str,
+        sha1: str,
+        md5_10m: str,
+    ) -> dict[str, Any]:
+        """单聊大文件分片上传准备工作，返回 upload_id、block_size、parts 预签名 URL 与 upload_config。
+
+        file_type: 1=图片, 2=视频, 3=语音, 4=文件。随后逐片 PUT 到 parts[].presigned_url，
+        每片成功后调用 post_c2c_upload_part_finish，全部分片完成后调用 post_c2c_file 合并。
+        """
+        payload = {
+            "file_type": file_type,
+            "file_size": str(file_size),
+            "file_name": file_name,
+            "md5": md5,
+            "sha1": sha1,
+            "md5_10m": md5_10m,
+        }
+        return await self._http.request(
+            Route("POST", "/v2/users/{openid}/upload_prepare", openid=openid),
+            json=payload,
+        )
+
+    async def post_group_upload_prepare(
+        self,
+        group_openid: str,
+        file_type: int,
+        file_size: int | str,
+        file_name: str,
+        md5: str,
+        sha1: str,
+        md5_10m: str,
+    ) -> dict[str, Any]:
+        """群聊大文件分片上传准备工作，参数与返回同 post_c2c_upload_prepare。"""
+        payload = {
+            "file_type": file_type,
+            "file_size": str(file_size),
+            "file_name": file_name,
+            "md5": md5,
+            "sha1": sha1,
+            "md5_10m": md5_10m,
+        }
+        return await self._http.request(
+            Route("POST", "/v2/groups/{group_openid}/upload_prepare", group_openid=group_openid),
+            json=payload,
+        )
+
+    async def post_c2c_upload_part_finish(
+        self,
+        openid: str,
+        upload_id: str,
+        part_index: int,
+        block_size: int | str,
+        md5: str,
+    ) -> dict[str, Any]:
+        """通知服务端单聊某个分片已上传完成（每片 PUT 成功后调用）。"""
+        payload = {
+            "upload_id": upload_id,
+            "part_index": part_index,
+            "block_size": str(block_size),
+            "md5": md5,
+        }
+        return await self._http.request(
+            Route("POST", "/v2/users/{openid}/upload_part_finish", openid=openid),
+            json=payload,
+        )
+
+    async def post_group_upload_part_finish(
+        self,
+        group_openid: str,
+        upload_id: str,
+        part_index: int,
+        block_size: int | str,
+        md5: str,
+    ) -> dict[str, Any]:
+        """通知服务端群聊某个分片已上传完成（每片 PUT 成功后调用）。"""
+        payload = {
+            "upload_id": upload_id,
+            "part_index": part_index,
+            "block_size": str(block_size),
+            "md5": md5,
+        }
+        return await self._http.request(
+            Route("POST", "/v2/groups/{group_openid}/upload_part_finish", group_openid=group_openid),
+            json=payload,
+        )
+
+    # ---- 群信息查询（需白名单权限）----
+
+    async def get_group_info(self, group_openid: str) -> dict[str, Any]:
+        """获取群基本信息（群名/简介/分类/标签/成员数），需白名单权限。"""
+        return await self._http.request(
+            Route("GET", "/v2/groups/{group_openid}/info", group_openid=group_openid),
+        )
+
+    async def get_group_bot_state(self, group_openid: str) -> dict[str, Any]:
+        """获取机器人在群内的状态（openid/入群时间/是否接收主动推送/消息接收设置/群成员角色）。"""
+        return await self._http.request(
+            Route("GET", "/v2/groups/{group_openid}/bot_state", group_openid=group_openid),
         )
 
     post_group_recall = delete_message

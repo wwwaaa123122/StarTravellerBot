@@ -134,6 +134,9 @@ finally:
 | `on_group_del_robot(event)` | `GROUP_DEL_ROBOT` | `Group` | 机器人被移出群 |
 | `on_group_msg_reject(event)` | `GROUP_MSG_REJECT` | `Group` | 群主关闭机器人消息权限 |
 | `on_group_msg_receive(event)` | `GROUP_MSG_RECEIVE` | `Group` | 群主重新开启机器人消息权限 |
+| `on_c2c_msg_receive(event)` | `C2C_MSG_RECEIVE` | `C2CMsgReceive` | 用户开启机器人单聊主动消息 |
+| `on_c2c_msg_reject(event)` | `C2C_MSG_REJECT` | `C2CMsgReject` | 用户关闭机器人单聊主动消息 |
+| `on_subscribe_message_status(event)` | `SUBSCRIBE_MESSAGE_STATUS` | `SubscribeMessageStatus` | 用户订阅授权状态变更（模板授权） |
 | `on_friend_add(event)` | `FRIEND_ADD` | `FriendUser` | 好友添加 |
 | `on_friend_del(event)` | `FRIEND_DEL` | `FriendUser` | 好友删除 |
 
@@ -203,6 +206,34 @@ print(int(intents))  # 位掩码，可传入 Identify
 
 `qqbot_openapi.api.API` — 开放平台 REST API。通过 `client.api` 获取（`start()` 后可用），也可独立构造：`API(HTTPClient(...))`。
 
+### 接口一览
+
+| 方法 | HTTP | 说明 |
+| :--- | :--- | :--- |
+| `post_group_message` | `POST /v2/groups/{group_openid}/messages` | 群聊消息（文本/Markdown/键盘/富媒体） |
+| `post_c2c_message` | `POST /v2/users/{openid}/messages` | 单聊消息（含 `input_notify` 输入中状态） |
+| `post_channel_message` | `POST /channels/{channel_id}/messages` | 频道子频道消息 |
+| `post_stream_message` | `POST /v2/users/{user_openid}/stream_messages` | 单聊流式消息（AI 流式回复） |
+| `post_group_file` | `POST /v2/groups/{group_openid}/files` | 群聊富媒体文件 |
+| `post_c2c_file` | `POST /v2/users/{openid}/files` | 单聊富媒体文件 |
+| `post_c2c_upload_prepare` | `POST /v2/users/{openid}/upload_prepare` | 单聊分片上传准备 |
+| `post_group_upload_prepare` | `POST /v2/groups/{group_openid}/upload_prepare` | 群聊分片上传准备 |
+| `post_c2c_upload_part_finish` | `POST /v2/users/{openid}/upload_part_finish` | 单聊分片上报完成 |
+| `post_group_upload_part_finish` | `POST /v2/groups/{group_openid}/upload_part_finish` | 群聊分片上报完成 |
+| `get_group_info` | `GET /v2/groups/{group_openid}/info` | 群基本信息（白名单） |
+| `get_group_bot_state` | `GET /v2/groups/{group_openid}/bot_state` | 机器人群内状态（白名单） |
+| `delete_message` | `POST .../messages/{message_id}/recall` | 撤回消息（`post_group_recall` / `post_c2c_recall` 别名） |
+| `get_group_restrict_chat_setting` | `GET /v2/groups/{group_openid}/restrict_chat_setting` | 查询群禁言设置 |
+| `set_group_restrict_chat_setting` | `POST /v2/groups/{group_openid}/restrict_chat_setting` | 设置群禁言 |
+| `get_group_join_request_list` | `GET /v2/groups/{group_openid}/join_requests` | 入群申请列表 |
+| `approval_join_request` | `POST /v2/groups/{group_openid}/join_requests/{request_id}` | 审批入群申请 |
+| `get_join_approval_strategies` | `GET /v2/groups/join_approval_strategies` | 查询入群自动审批策略 |
+| `create_join_approval_strategy` | `POST /v2/groups/join_approval_strategy` | 创建自动审批策略 |
+| `delete_join_approval_strategy` | `DELETE /v2/groups/join_approval_strategy/{strategy_id}` | 删除自动审批策略 |
+| `update_join_approval_strategy` | `PATCH /v2/groups/join_approval_strategy/{strategy_id}` | 更新自动审批策略 |
+| `execute_join_approval_strategy` | `POST /v2/groups/join_approval_strategy/{strategy_id}/execute` | 执行自动审批策略 |
+| `update_join_approval_strategy_whitelist` | `POST /v2/groups/join_approval_strategy/{strategy_id}/whitelist` | 更新策略白名单 |
+
 ### post_group_message
 
 ```python
@@ -218,7 +249,11 @@ async def post_group_message(
     ark: Optional[Dict[str, Any]] = None,
     message_reference: Optional[Dict[str, Any]] = None,
     msg_elements: Optional[List[Dict[str, Any]]] = None,
-) -> Dict[str, Any]
+    force_verify_image_resource: Optional[bool] = None,
+    event_id: str | None = None,
+    media: dict[str, Any] | None = None,
+    is_wakeup: bool | None = None,
+) -> dict[str, Any]
 ```
 
 发送群聊消息（`POST /v2/groups/{group_openid}/messages`）。
@@ -226,7 +261,7 @@ async def post_group_message(
 | 参数 | 说明 |
 | :--- | :--- |
 | `group_openid` | 群标识（群事件/消息中的 `group_openid`） |
-| `msg_type` | 消息类型，`0` 文本 / `2` Markdown |
+| `msg_type` | 消息类型：`0` 文本 / `2` Markdown / `6` 输入中状态 / `7` 富媒体 |
 | `msg_id` | 被动回复时传事件消息的 `id`；主动推送留空 `""` |
 | `msg_seq` | 主动推送的幂等序号，可选 |
 | `content` | 文本内容（`msg_type=0` 时使用） |
@@ -235,6 +270,10 @@ async def post_group_message(
 | `ark` | ARK 模板消息 |
 | `message_reference` | 引用消息（`{"message_id": "..."}`） |
 | `msg_elements` | 富媒体消息元素列表 |
+| `force_verify_image_resource` | 强制对图片资源进行二次校验，可选 |
+| `event_id` | 被动回复事件 ID（防重复回复），可选 |
+| `media` | 富媒体文件（`msg_type=7`），结构与分片上传合并后的 `media` 一致 |
+| `is_wakeup` | 标记为互动召回消息，可选 |
 
 返回开放平台响应 JSON 字典。
 
@@ -283,20 +322,35 @@ async def post_c2c_message(
     ark: Optional[Dict[str, Any]] = None,
     message_reference: Optional[Dict[str, Any]] = None,
     msg_elements: Optional[List[Dict[str, Any]]] = None,
-) -> Dict[str, Any]
+    force_verify_image_resource: Optional[bool] = None,
+    msg_seq: int | None = None,
+    event_id: str | None = None,
+    media: dict[str, Any] | None = None,
+    is_wakeup: bool | None = None,
+    input_notify: dict[str, Any] | None = None,
+) -> dict[str, Any]
 ```
 
 发送 C2C 单聊消息（`POST /v2/users/{openid}/messages`）。`openid` 为用户 `user_openid`，其余参数语义同 `post_group_message`。
+
+| 参数 | 说明 |
+| :--- | :--- |
+| `msg_seq` | 被动回复的递增序号（同一用户回复按 0、1、2、3 递增），用于消息去重；主动推送留空 |
+| `event_id` | 被动回复事件 ID（防重复回复），可选 |
+| `media` | 富媒体文件（`msg_type=7`） |
+| `is_wakeup` | 标记为互动召回消息，可选 |
+| `input_notify` | 输入中状态提示（`msg_type=6`，`{"ephemeral": false}`） |
 
 **示例**
 
 ```python
 async def on_c2c_message_create(self, message):
-    # 被动回复
+    # 被动回复：msg_seq 需对同一用户递增（0 → 1 → 2 → 3）
     await self.api.post_c2c_message(
         openid=message.author.user_openid,
         content="私聊收到！",
         msg_id=message.id,
+        msg_seq=0,
     )
 ```
 
@@ -346,9 +400,11 @@ async def post_group_file(
     self,
     group_openid: str,
     file_type: int,
-    url: str,
+    url: str = "",
     srv_send_msg: bool = True,
-) -> Dict[str, Any]
+    file_name: str | None = None,
+    upload_id: str | None = None,
+) -> dict[str, Any]
 ```
 
 发送群聊富媒体文件（`POST /v2/groups/{group_openid}/files`）。`file_type`：`1` 图片、`2` 视频、`3` 语音，`4` 文件。
@@ -356,6 +412,15 @@ async def post_group_file(
 `url` 参数会自动检测来源：
 - `http(s)://` 开头的公网地址 → 以 `url` 字段上传
 - `data:image/png;base64,...` 或纯 base64 字符串 → 以 `file_data` 字段上传
+
+| 参数 | 说明 |
+| :--- | :--- |
+| `url` | 文件来源（公网地址或 base64），与 `upload_id` 二选一 |
+| `srv_send_msg` | 是否同时发送一条文件消息，默认 `True` |
+| `file_name` | 文件名，可选 |
+| `upload_id` | 分片上传任务 ID（`post_group_upload_prepare` 返回），传此值时走分片合并路径，`url` 可留空 |
+
+`url`、`file_data`、`upload_id` 三者均未提供时抛 `ValueError`。
 
 **示例**
 
@@ -383,12 +448,14 @@ async def post_c2c_file(
     self,
     openid: str,
     file_type: int,
-    url: str,
+    url: str = "",
     srv_send_msg: bool = True,
-) -> Dict[str, Any]
+    file_name: str | None = None,
+    upload_id: str | None = None,
+) -> dict[str, Any]
 ```
 
-发送 C2C 单聊富媒体文件（`POST /v2/users/{openid}/files`），参数与来源检测同 `post_group_file`（`url` 字段 or `file_data` 字段）。
+发送 C2C 单聊富媒体文件（`POST /v2/users/{openid}/files`），参数与来源检测同 `post_group_file`（`url` 字段 or `file_data` 字段）。大文件用 `upload_id` 走分片合并路径。
 
 **示例**
 
@@ -437,6 +504,206 @@ await client.api.post_c2c_recall(
     message_id="MESSAGE_ID",
     openid="USER_OPENID",
 )
+```
+
+### post_stream_message
+
+```python
+async def post_stream_message(
+    self,
+    user_openid: str,
+    input_mode: str | None = None,
+    input_state: int | None = None,
+    index: int | None = None,
+    content_type: str | None = None,
+    content_raw: str | None = None,
+    event_id: str | None = None,
+    msg_id: str | None = None,
+    stream_msg_id: str | None = None,
+    msg_seq: int | None = None,
+    is_wakeup: bool | None = None,
+) -> dict[str, Any]
+```
+
+单聊流式消息（`POST /v2/users/{user_openid}/stream_messages`），适用于 AI 逐字/逐段输出，上限 50 QPS。同一条回复的每个分片共享同一个 `stream_msg_id`，`index` 从 `0` 递增。
+
+| 参数 | 说明 |
+| :--- | :--- |
+| `user_openid` | 用户 `openid` |
+| `input_mode` | `append`（默认，`content_raw` 在服务端拼接）或 `replace`（全量正文） |
+| `input_state` | `1` 生成中，`10` 生成结束 |
+| `index` | 分片序号，从 `0` 递增 |
+| `content_type` | `text` 或 `markdown` |
+| `content_raw` | 本分片正文 |
+| `event_id` | 被动回复事件 ID（与 `msg_id` 二选一） |
+| `msg_id` | 被动回复的消息 ID（与 `event_id` 二选一） |
+| `stream_msg_id` | 流式消息 ID；首片不传，由服务端在响应 `id` 中返回，后续分片必须携带 |
+| `msg_seq` | 被动回复递增序号，可选 |
+| `is_wakeup` | 标记为互动召回消息，可选 |
+
+**示例**
+
+```python
+# 首片：不传 stream_msg_id，从响应中取 id
+resp = await client.api.post_stream_message(
+    user_openid="USER_OPENID",
+    input_state=1,
+    index=0,
+    content_type="text",
+    content_raw="第一段",
+    msg_id="MESSAGE_ID",
+)
+stream_msg_id = resp["id"]
+
+# 后续分片：携带 stream_msg_id，index 递增
+await client.api.post_stream_message(
+    user_openid="USER_OPENID",
+    input_state=1,
+    index=1,
+    content_raw="第二段",
+    stream_msg_id=stream_msg_id,
+)
+
+# 收尾：input_state=10 结束
+await client.api.post_stream_message(
+    user_openid="USER_OPENID",
+    input_state=10,
+    index=2,
+    content_raw="。",
+    stream_msg_id=stream_msg_id,
+)
+```
+
+### 分片上传（大文件富媒体）
+
+官方推荐的大文件上传方式（视频/音频/大图/文件），流程：`upload_prepare` 获取预签名 URL → 逐片 `PUT` → 每片调 `upload_part_finish` 上报 → 全部完成后调 `post_group_file` / `post_c2c_file` 合并发送。
+
+#### post_c2c_upload_prepare
+
+```python
+async def post_c2c_upload_prepare(
+    self,
+    openid: str,
+    file_type: int,
+    file_size: int | str,
+    file_name: str,
+    md5: str,
+    sha1: str,
+    md5_10m: str,
+) -> dict[str, Any]
+```
+
+单聊上传准备（`POST /v2/users/{openid}/upload_prepare`）。`file_type`：`1` 图片 / `2` 视频 / `3` 语音 / `4` 文件。返回 `upload_id`、`block_size`、`parts`（含各片 `presigned_url`）与 `upload_config`。
+
+#### post_group_upload_prepare
+
+```python
+async def post_group_upload_prepare(
+    self,
+    group_openid: str,
+    file_type: int,
+    file_size: int | str,
+    file_name: str,
+    md5: str,
+    sha1: str,
+    md5_10m: str,
+) -> dict[str, Any]
+```
+
+群聊上传准备（`POST /v2/groups/{group_openid}/upload_prepare`），参数与返回同 `post_c2c_upload_prepare`。
+
+#### post_c2c_upload_part_finish
+
+```python
+async def post_c2c_upload_part_finish(
+    self,
+    openid: str,
+    upload_id: str,
+    part_index: int,
+    block_size: int | str,
+    md5: str,
+) -> dict[str, Any]
+```
+
+上报单聊某分片已上传完成（`POST /v2/users/{openid}/upload_part_finish`），每片 `PUT` 成功后调用一次。
+
+#### post_group_upload_part_finish
+
+```python
+async def post_group_upload_part_finish(
+    self,
+    group_openid: str,
+    upload_id: str,
+    part_index: int,
+    block_size: int | str,
+    md5: str,
+) -> dict[str, Any]
+```
+
+上报群聊某分片已上传完成（`POST /v2/groups/{group_openid}/upload_part_finish`）。
+
+**完整流程示例（单聊）**
+
+```python
+import aiohttp, hashlib
+
+async def upload_file(openid: str, file_type: int, path: str):
+    data = open(path, "rb").read()
+    md5 = hashlib.md5(data).hexdigest()
+    sha1 = hashlib.sha1(data).hexdigest()
+    md5_10m = hashlib.md5(data[:10 * 1024 * 1024]).hexdigest()
+
+    resp = await client.api.post_c2c_upload_prepare(
+        openid=openid, file_type=file_type, file_size=len(data),
+        file_name=path.rsplit("/", 1)[-1],
+        md5=md5, sha1=sha1, md5_10m=md5_10m,
+    )
+    upload_id = resp["upload_id"]
+    block_size = int(resp["block_size"])
+
+    async with aiohttp.ClientSession() as session:
+        for i, part in enumerate(resp["parts"]):
+            chunk = data[i * block_size: (i + 1) * block_size]
+            async with session.put(part["presigned_url"], data=chunk) as r:
+                r.raise_for_status()
+            await client.api.post_c2c_upload_part_finish(
+                openid=openid, upload_id=upload_id,
+                part_index=i, block_size=len(chunk), md5=md5,
+            )
+
+    # 合并发送
+    await client.api.post_c2c_file(
+        openid=openid, file_type=file_type,
+        upload_id=upload_id, file_name="video.mp4",
+    )
+```
+
+> 注意：`PUT` 分片用原始字节流（`data=chunk`），不要设置 `Content-Type` 之外的额外头部；`block_size` 以实际分片字节数为准。
+
+### get_group_info
+
+```python
+async def get_group_info(self, group_openid: str) -> dict[str, Any]
+```
+
+获取群基本信息（`GET /v2/groups/{group_openid}/info`）：群名称、简介、分类、标签、成员数量等。需白名单权限（无权限时返回错误码 `11253`）。
+
+```python
+info = await client.api.get_group_info(group_openid="GROUP_OPENID")
+print(info["name"], info["member_count"])
+```
+
+### get_group_bot_state
+
+```python
+async def get_group_bot_state(self, group_openid: str) -> dict[str, Any]
+```
+
+获取机器人在群内的状态（`GET /v2/groups/{group_openid}/bot_state`）：机器人 `openid`、入群时间、是否接收主动推送、消息接收设置、群成员角色等。需白名单权限。
+
+```python
+state = await client.api.get_group_bot_state(group_openid="GROUP_OPENID")
+print(state["robot_openid"], state["group_role"])
 ```
 
 ## 消息模型

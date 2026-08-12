@@ -5,8 +5,10 @@ import asyncio
 import pytest
 
 from qqbot_openapi import (
-    AuditResult,
     Audio,
+    AuditResult,
+    C2CMsgReceive,
+    C2CMsgReject,
     Channel,
     DirectMessage,
     FriendUser,
@@ -21,9 +23,10 @@ from qqbot_openapi import (
     Reaction,
     Ready,
     Reply,
+    SubscribeMessageStatus,
     Thread,
 )
-from qqbot_openapi.connection import ConnectionState, _EVENT_HANDLERS
+from qqbot_openapi.connection import _EVENT_HANDLERS, ConnectionState
 
 
 def _run_state(state, payload):
@@ -133,6 +136,12 @@ _EVENT_CASES = [
     ("GROUP_MSG_RECEIVE", Group, "on_group_msg_receive", {"group_openid": "g1"}),
     ("FRIEND_ADD", FriendUser, "on_friend_add", {"openid": "u1"}),
     ("FRIEND_DEL", FriendUser, "on_friend_del", {"openid": "u1"}),
+    ("C2C_MSG_RECEIVE", C2CMsgReceive, "on_c2c_msg_receive",
+     {"openid": "u1", "timestamp": 1784570617}),
+    ("C2C_MSG_REJECT", C2CMsgReject, "on_c2c_msg_reject",
+     {"openid": "u1", "timestamp": 1784570599}),
+    ("SUBSCRIBE_MESSAGE_STATUS", SubscribeMessageStatus, "on_subscribe_message_status",
+     {"openid": "u1", "result": [{"template_id": 10001, "op": 1}]}),
 ]
 
 
@@ -219,7 +228,8 @@ def test_event_handler_map_is_complete():
         "on_forum_post_delete", "on_forum_reply_create",
         "on_forum_reply_delete", "on_forum_publish_audit_result",
         "on_audio_start", "on_audio_finish", "on_audio_on_mic",
-        "on_audio_off_mic",
+        "on_audio_off_mic", "on_c2c_msg_receive", "on_c2c_msg_reject",
+        "on_subscribe_message_status",
     }
     actual = {cb for cb, _ in _EVENT_HANDLERS.values()}
     assert expected <= actual

@@ -8,8 +8,8 @@ from .auth import AccessTokenManager  # noqa: F401
 from .client import Client  # noqa: F401
 from .connection import ConnectionState, GatewayClient  # noqa: F401
 from .errors import (  # noqa: F401
-    APIError,
     AccessTokenError,
+    APIError,
     GatewayError,
     NotSupportError,
     QQBotError,
@@ -19,9 +19,11 @@ from .http import HTTPClient, Route  # noqa: F401
 from .intents import Intents  # noqa: F401
 from .logging import get_logger  # noqa: F401
 from .message import (  # noqa: F401
-    AuditResult,
     Audio,
+    AuditResult,
     Author,
+    C2CMsgReceive,
+    C2CMsgReject,
     Channel,
     DirectMessage,
     Embed,
@@ -41,6 +43,8 @@ from .message import (  # noqa: F401
     Reaction,
     Ready,
     Reply,
+    SubscribeMessageStatus,
+    SubscribeMsgTemplateResult,
     Thread,
     User,
 )
@@ -53,6 +57,8 @@ __all__ = (
     "AuditResult",
     "Audio",
     "Author",
+    "C2CMsgReceive",
+    "C2CMsgReject",
     "Channel",
     "Client",
     "ConnectionState",
@@ -81,6 +87,8 @@ __all__ = (
     "Ready",
     "Reply",
     "Route",
+    "SubscribeMessageStatus",
+    "SubscribeMsgTemplateResult",
     "Thread",
     "User",
     "WebSocketClosedError",

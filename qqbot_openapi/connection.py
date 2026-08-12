@@ -12,8 +12,10 @@ import aiohttp
 from . import logging as qq_logging
 from .errors import WebSocketClosedError
 from .message import (
-    AuditResult,
     Audio,
+    AuditResult,
+    C2CMsgReceive,
+    C2CMsgReject,
     Channel,
     DirectMessage,
     FriendUser,
@@ -29,6 +31,7 @@ from .message import (
     Reaction,
     Ready,
     Reply,
+    SubscribeMessageStatus,
     Thread,
 )
 
@@ -81,6 +84,9 @@ _EVENT_HANDLERS: Dict[str, tuple] = {
     "GROUP_DEL_ROBOT": ("on_group_del_robot", Group),
     "GROUP_MSG_REJECT": ("on_group_msg_reject", Group),
     "GROUP_MSG_RECEIVE": ("on_group_msg_receive", Group),
+    "C2C_MSG_RECEIVE": ("on_c2c_msg_receive", C2CMsgReceive),
+    "C2C_MSG_REJECT": ("on_c2c_msg_reject", C2CMsgReject),
+    "SUBSCRIBE_MESSAGE_STATUS": ("on_subscribe_message_status", SubscribeMessageStatus),
     "FRIEND_ADD": ("on_friend_add", FriendUser),
     "FRIEND_DEL": ("on_friend_del", FriendUser),
     "AT_MESSAGE_CREATE": ("on_at_message_create", Message),

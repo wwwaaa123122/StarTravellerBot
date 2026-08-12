@@ -177,6 +177,22 @@ class Audio(Model):
     pass
 
 
+class C2CMsgReceive(Model):
+    pass
+
+
+class C2CMsgReject(Model):
+    pass
+
+
+class SubscribeMessageStatus(Model):
+    pass
+
+
+class SubscribeMsgTemplateResult(Model):
+    pass
+
+
 User = Model
 Author = Model
 Member = GuildMember

@@ -224,3 +224,165 @@ async def test_delete_join_approval_strategy(api):
     route = mock_http.request.call_args[0][0]
     assert route.method == "DELETE"
     assert route.url == "/v2/groups/join_approval_strategy/st_1"
+
+
+async def test_post_group_message_event_media_wakeup(api):
+    client, mock_http = api
+    await client.post_group_message(
+        group_openid="g1",
+        msg_type=7,
+        media={"file_info": "fi_1"},
+        event_id="evt_1",
+        is_wakeup=True,
+    )
+    route, kwargs = mock_http.request.call_args[0][0], mock_http.request.call_args[1]
+    assert route.url == "/v2/groups/g1/messages"
+    assert kwargs["json"]["media"] == {"file_info": "fi_1"}
+    assert kwargs["json"]["event_id"] == "evt_1"
+    assert kwargs["json"]["is_wakeup"] is True
+
+
+async def test_post_c2c_message_seq_event_media_notify(api):
+    client, mock_http = api
+    await client.post_c2c_message(
+        openid="u1",
+        msg_type=6,
+        input_notify={"ephemeral": False},
+        msg_seq=2,
+        event_id="evt_1",
+        is_wakeup=False,
+    )
+    route, kwargs = mock_http.request.call_args[0][0], mock_http.request.call_args[1]
+    assert route.url == "/v2/users/u1/messages"
+    body = kwargs["json"]
+    assert body["msg_seq"] == 2
+    assert body["event_id"] == "evt_1"
+    assert body["is_wakeup"] is False
+    assert body["input_notify"] == {"ephemeral": False}
+
+
+async def test_post_group_file_upload_id(api):
+    client, mock_http = api
+    await client.post_group_file(
+        group_openid="g1", file_type=2, srv_send_msg=False,
+        file_name="video.mp4", upload_id="upload_abc",
+    )
+    route, kwargs = mock_http.request.call_args[0][0], mock_http.request.call_args[1]
+    assert route.url == "/v2/groups/g1/files"
+    body = kwargs["json"]
+    assert body["upload_id"] == "upload_abc"
+    assert body["file_name"] == "video.mp4"
+    assert "url" not in body and "file_data" not in body
+
+
+async def test_post_group_file_requires_source(api):
+    client, mock_http = api
+    with pytest.raises(ValueError):
+        await client.post_group_file(group_openid="g1", file_type=1)
+
+
+async def test_post_c2c_file_upload_id(api):
+    client, mock_http = api
+    await client.post_c2c_file(
+        openid="u1", file_type=1, upload_id="upload_abc",
+    )
+    body = mock_http.request.call_args[1]["json"]
+    assert body["upload_id"] == "upload_abc"
+
+
+async def test_post_stream_message(api):
+    client, mock_http = api
+    await client.post_stream_message(
+        user_openid="u1",
+        input_mode="replace",
+        input_state=1,
+        index=0,
+        content_type="markdown",
+        content_raw="正在生成",
+        msg_id="m1",
+        stream_msg_id="sm1",
+        msg_seq=1,
+        is_wakeup=True,
+    )
+    route, kwargs = mock_http.request.call_args[0][0], mock_http.request.call_args[1]
+    assert route.url == "/v2/users/u1/stream_messages"
+    body = kwargs["json"]
+    assert body["input_state"] == 1
+    assert body["index"] == 0
+    assert body["content_type"] == "markdown"
+    assert body["stream_msg_id"] == "sm1"
+    assert body["is_wakeup"] is True
+
+
+async def test_post_stream_message_minimal(api):
+    client, mock_http = api
+    await client.post_stream_message(user_openid="u1", content_raw="hi")
+    body = mock_http.request.call_args[1]["json"]
+    assert body == {"content_raw": "hi"}
+
+
+async def test_post_c2c_upload_prepare(api):
+    client, mock_http = api
+    await client.post_c2c_upload_prepare(
+        openid="u1", file_type=2, file_size=31457280, file_name="demo.mp4",
+        md5="d41d8cd98f00b204e9800998ecf8427e",
+        sha1="da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        md5_10m="c4d8c5f3a2b1e0f9a8b7c6d5e4f3a2b1",
+    )
+    route, kwargs = mock_http.request.call_args[0][0], mock_http.request.call_args[1]
+    assert route.url == "/v2/users/u1/upload_prepare"
+    body = kwargs["json"]
+    assert body["file_size"] == "31457280"
+    assert body["file_name"] == "demo.mp4"
+    assert body["md5_10m"]
+
+
+async def test_post_group_upload_prepare(api):
+    client, mock_http = api
+    await client.post_group_upload_prepare(
+        group_openid="g1", file_type=1, file_size="1048576", file_name="a.png",
+        md5="m", sha1="s", md5_10m="m10",
+    )
+    route, kwargs = mock_http.request.call_args[0][0], mock_http.request.call_args[1]
+    assert route.url == "/v2/groups/g1/upload_prepare"
+    assert kwargs["json"]["file_type"] == 1
+
+
+async def test_post_c2c_upload_part_finish(api):
+    client, mock_http = api
+    await client.post_c2c_upload_part_finish(
+        openid="u1", upload_id="upload_abc", part_index=0,
+        block_size=10485760, md5="m0",
+    )
+    route, kwargs = mock_http.request.call_args[0][0], mock_http.request.call_args[1]
+    assert route.url == "/v2/users/u1/upload_part_finish"
+    body = kwargs["json"]
+    assert body["upload_id"] == "upload_abc"
+    assert body["part_index"] == 0
+    assert body["block_size"] == "10485760"
+
+
+async def test_post_group_upload_part_finish(api):
+    client, mock_http = api
+    await client.post_group_upload_part_finish(
+        group_openid="g1", upload_id="upload_abc", part_index=1,
+        block_size="5242880", md5="m1",
+    )
+    route = mock_http.request.call_args[0][0]
+    assert route.url == "/v2/groups/g1/upload_part_finish"
+
+
+async def test_get_group_info(api):
+    client, mock_http = api
+    await client.get_group_info(group_openid="g1")
+    route = mock_http.request.call_args[0][0]
+    assert route.method == "GET"
+    assert route.url == "/v2/groups/g1/info"
+
+
+async def test_get_group_bot_state(api):
+    client, mock_http = api
+    await client.get_group_bot_state(group_openid="g1")
+    route = mock_http.request.call_args[0][0]
+    assert route.method == "GET"
+    assert route.url == "/v2/groups/g1/bot_state"
