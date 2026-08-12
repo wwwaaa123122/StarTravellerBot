@@ -183,7 +183,7 @@ class API:
         file_name: str | None = None,
         upload_id: str | None = None,
     ) -> dict[str, Any]:
-        payload = {"file_type": file_type, "srv_send_msg": srv_send_msg}
+        payload: dict[str, Any] = {"file_type": file_type, "srv_send_msg": srv_send_msg}
         if upload_id is not None:
             payload["upload_id"] = upload_id
         else:
@@ -206,7 +206,7 @@ class API:
         file_name: str | None = None,
         upload_id: str | None = None,
     ) -> dict[str, Any]:
-        payload = {"file_type": file_type, "srv_send_msg": srv_send_msg}
+        payload: dict[str, Any] = {"file_type": file_type, "srv_send_msg": srv_send_msg}
         if upload_id is not None:
             payload["upload_id"] = upload_id
         else:

@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from . import logging as qq_logging
 from .api import API
@@ -27,7 +27,7 @@ class Client:
 
         self.intents = intents or Intents()
         self.api: Optional[API] = None
-        self.robot = None
+        self.robot: Optional[Any] = None
         self._appid: Optional[str] = None
         self._secret: Optional[str] = None
         self._token_manager: Optional[AccessTokenManager] = None

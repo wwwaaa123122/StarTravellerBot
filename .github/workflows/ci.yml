@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e .
-          pip install pytest pytest-asyncio apscheduler loguru
+          pip install pytest pytest-asyncio apscheduler loguru flask
       - name: Run tests
         run: pytest -q
 

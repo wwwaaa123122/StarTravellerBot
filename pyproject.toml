@@ -29,11 +29,20 @@ extend-exclude = ["node_modules", "docs", ".vitepress"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP"]
-ignore = ["E501"]
+ignore = [
+    "E501",  # 行长限制
+    "E402",  # client.py/main.py 在 os.chdir 后导入本地模块的合法模式
+    "UP006", "UP007", "UP009", "UP015", "UP031", "UP035", "UP045",  # 历史代码旧式 typing 风格
+]
 
 [tool.mypy]
 python_version = "3.10"
+explicit_package_bases = true
 ignore_missing_imports = true
 check_untyped_defs = true
 no_implicit_optional = true
 warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "qqbot_openapi.psutil_compat"
+ignore_errors = true

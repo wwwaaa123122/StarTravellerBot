@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any, List, Optional, Union
+from typing import Any, Optional, Union
 
 
 def _wrap(value: Any) -> Any:

@@ -5,7 +5,7 @@ import inspect
 import json
 import platform
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, cast
 
 import aiohttp
 
@@ -142,7 +142,7 @@ class ConnectionState:
         if seq is not None:
             self.seq = seq
 
-        event_name = payload.get("t")
+        event_name = payload.get("t") or ""
         handler = _EVENT_HANDLERS.get(event_name)
         if handler is None:
             return
@@ -250,15 +250,15 @@ class GatewayClient:
                 self._cancel_heartbeat()
             return ws.close_code
 
-    async def _handshake(self, session: aiohttp.ClientSession) -> aiohttp.ClientWebSocketResponse:
+    async def _handshake(self, session: aiohttp.ClientSession) -> aiohttp.ClientWebSocketResponse[Literal[True]]:
         token = await self._token_manager.get_access_token()
         headers = {"Authorization": f"QQBot {token}"}
-        ws = await session.ws_connect(
+        ws = cast(aiohttp.ClientWebSocketResponse[Literal[True]], await session.ws_connect(
             self._url,
             headers=headers,
             heartbeat=30,
             max_msg_size=64 * 1024 * 1024,
-        )
+        ))
         msg = await asyncio.wait_for(ws.receive(), timeout=15)
         payload = json.loads(msg.data)
         if payload.get("op") != OP_HELLO:

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 

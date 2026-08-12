@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
 
+import base64
 import importlib.util
 import inspect
 import json
 import os
 import time
 import traceback
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-import base64
-
-from Tools.scheduler import get_scheduler
 from core.context import PluginContext
 from core.permissions import is_root
+from Tools.scheduler import get_scheduler
 
 PLUGIN_CATEGORIES = [
     ("🎯 签到系统", ["checkin", "affection"]),
@@ -211,8 +210,11 @@ class PluginManager:
                     self.id = msg_id
 
         class FakeEvents:
-            class GroupMessageEvent: pass
-            class PrivateMessageEvent: pass
+            class GroupMessageEvent:
+                pass
+
+            class PrivateMessageEvent:
+                pass
 
         return FakeManager, FakeSegments, FakeEvents
 
@@ -330,7 +332,7 @@ class PluginManager:
 
             async def get_msg(self, msg_id):
                 class FakeMsg:
-                    data = {'message': []}
+                    data: dict = {'message': []}
                 return FakeMsg()
 
             async def del_message(self, msg_id):
@@ -352,7 +354,7 @@ class PluginManager:
         adapted_event = self.adapt_message_for_plugin(message, order)
         actions = self.create_plugin_actions(message)
         manager, segments, events = self.create_compat_objects()
-        cooldowns = {}
+        cooldowns: dict = {}
 
         return {
             'event': adapted_event,

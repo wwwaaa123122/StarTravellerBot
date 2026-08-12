@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from dataclasses import dataclass, field, fields as _fields
+from dataclasses import dataclass, field
+from dataclasses import fields as _fields
 
 
 def _pick(cls, source: dict) -> dict:

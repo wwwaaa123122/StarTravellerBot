@@ -3,7 +3,7 @@
 import copy
 import os
 
-from config.defaults import DEFAULT_CONFIG, ENV_MAP, _INT_KEYS, _FLOAT_KEYS, _BOOL_KEYS, _LIST_KEYS
+from config.defaults import _BOOL_KEYS, _FLOAT_KEYS, _INT_KEYS, _LIST_KEYS, DEFAULT_CONFIG, ENV_MAP
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(PROJECT_ROOT, ".env")

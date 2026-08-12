@@ -12,9 +12,11 @@ os.chdir(PROJECT_ROOT)
 sys.path.insert(0, PROJECT_ROOT)
 
 import warnings
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 import io
+
 _old_stdout = sys.stdout
 sys.stdout = io.StringIO()
 

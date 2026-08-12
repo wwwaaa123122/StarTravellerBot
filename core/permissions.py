@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from typing import Any
 
 def is_blacklisted(user_id: str, config: dict) -> bool:
     blacklist = config.get("black_list", []) or []

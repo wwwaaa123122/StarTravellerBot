@@ -104,7 +104,7 @@ class Dispatcher:
                     return
                 reminder_content = raw_content if scene.reminder_check_raw else content
                 if (reminder_content.startswith(client.reminder)) == scene.reply_on_reminder_match:
-                    await client._send_message(message, f"未找到匹配的插件命令，发送 @机器人 /帮助 查看可用指令")
+                    await client._send_message(message, "未找到匹配的插件命令，发送 @机器人 /帮助 查看可用指令")
                 return
 
             if scene.handle_logout and order in ("注销", f"{client.reminder}注销"):
@@ -148,7 +148,7 @@ class Dispatcher:
             else:
                 await client._send_message(message, text)
         elif scene.empty_action == "group_hint":
-            await client._send_message(message, f"发送 @机器人 /帮助 查看可用指令")
+            await client._send_message(message, "发送 @机器人 /帮助 查看可用指令")
         elif scene.empty_action == "help":
             help_text = client.plugin_manager.get_help_text(client.bot_name, client.version_name)
             sent = await client._send_help_image(message, help_text)
@@ -158,9 +158,9 @@ class Dispatcher:
     async def _ai_unavailable(self, message):
         client = self.client
         if hasattr(message, 'reply'):
-            await message.reply(content=f"未找到相关指令")
+            await message.reply(content="未找到相关指令")
         else:
-            await client._send_message(message, f"未找到相关指令")
+            await client._send_message(message, "未找到相关指令")
 
     async def _error_reply(self, message, scene: Scene, exc: Exception):
         client = self.client

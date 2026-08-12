@@ -1,30 +1,30 @@
 # -*- coding: utf-8 -*-
 
+import asyncio
 import os
 import sys
-import asyncio
 import traceback
 from typing import Any, Dict
 
-from qqbot_openapi import logging
-from qqbot_openapi import Message, DirectMessage
-from qqbot_openapi import Client as QQClient, Intents
+from qqbot_openapi import Client as QQClient
+from qqbot_openapi import DirectMessage, Intents, Message, logging
 
 CONTACT_URL = "https://xc-lr.cn/about"
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
-from Tools.core import BotContext, VERSION_NAME
-from Tools.rag_memory import RAGMemory
-from Tools.scheduler import get_scheduler, set_client, shutdown as shutdown_scheduler
-from ai.role_manager import RoleManager
 from ai.chat import AIChat
+from ai.role_manager import RoleManager
+from core.dispatcher import SCENE_AT, SCENE_C2C, SCENE_DIRECT, SCENE_GROUP, SCENE_GROUP_AT, Dispatcher
 from core.http import create_http_client
-from core.plugin_manager import PluginManager
 from core.messenger import Messenger
+from core.plugin_manager import PluginManager
 from core.stats import StatsTracker
-from core.dispatcher import Dispatcher, SCENE_C2C, SCENE_GROUP_AT, SCENE_GROUP, SCENE_DIRECT, SCENE_AT
+from Tools.core import VERSION_NAME, BotContext
+from Tools.rag_memory import RAGMemory
+from Tools.scheduler import get_scheduler, set_client
+from Tools.scheduler import shutdown as shutdown_scheduler
 
 
 class XCLRClient(QQClient):
@@ -182,8 +182,9 @@ class XCLRClient(QQClient):
 
     async def _try_send_tts(self, message, text: str):
         try:
-            from plugins.tts import sanitize_for_tts, _generate_tts
             import gc
+
+            from plugins.tts import _generate_tts, sanitize_for_tts
 
             clean = sanitize_for_tts(text)
             if not clean or len(clean) > 200:
@@ -204,7 +205,7 @@ class XCLRClient(QQClient):
             self.logger.error(f"AI 语音生成失败: {e}")
 
     async def on_c2c_message_create(self, message: Any):
-        self.logger.info(f"[EVENT] on_c2c_message_create triggered")
+        self.logger.info("[EVENT] on_c2c_message_create triggered")
         await self.dispatcher.route(message, SCENE_C2C)
 
     def _try_get_nickname(self, message) -> str:
@@ -221,18 +222,18 @@ class XCLRClient(QQClient):
         return ""
 
     async def on_group_at_message_create(self, message: Any):
-        self.logger.info(f"[EVENT] on_group_at_message_create triggered")
+        self.logger.info("[EVENT] on_group_at_message_create triggered")
         await self.dispatcher.route(message, SCENE_GROUP_AT)
 
     async def on_group_message_create(self, message: Any):
-        self.logger.info(f"[EVENT] on_group_message_create triggered")
+        self.logger.info("[EVENT] on_group_message_create triggered")
         await self.dispatcher.route(message, SCENE_GROUP)
 
     async def on_direct_message_create(self, message: DirectMessage):
         await self.dispatcher.route(message, SCENE_DIRECT)
 
     async def on_at_message_create(self, message: Message):
-        self.logger.info(f"[EVENT] on_at_message_create triggered")
+        self.logger.info("[EVENT] on_at_message_create triggered")
         await self.dispatcher.route(message, SCENE_AT)
 
     async def on_group_add_robot(self, group: Any):
