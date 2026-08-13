@@ -1,8 +1,11 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { ElMessage } from "element-plus";
 import { api, fmtNum, shortId, esc } from "../../api";
+import { toast } from "../../ui/toast";
 import StatCard from "../StatCard.vue";
+import UiTable from "../ui/UiTable.vue";
+import UiSkeleton from "../ui/UiSkeleton.vue";
+import UiTag from "../ui/UiTag.vue";
 
 const users = ref([]);
 const loading = ref(false);
@@ -13,7 +16,7 @@ async function load() {
     const res = await api("/users");
     users.value = (res.users || []).slice().sort((a, b) => (b.points || 0) - (a.points || 0));
   } catch (e) {
-    ElMessage.error(e.message);
+    toast.error(e.message);
   } finally {
     loading.value = false;
   }
@@ -28,8 +31,18 @@ const cards = computed(() => [
   { label: "总积分", value: fmtNum(totalPoints.value), sub: "累计发放", dot: "success" },
 ]);
 
+const columns = [
+  { key: "user", label: "用户", width: "26%" },
+  { key: "role", label: "角色", width: 100 },
+  { key: "points", label: "积分", width: 100, sortable: true },
+  { key: "affection", label: "好感度", width: 90, sortable: true },
+  { key: "streak", label: "连续天数", width: 100, sortable: true },
+  { key: "last_checkin", label: "最后签到", width: 130 },
+  { key: "share", label: "积分占比" },
+];
+
 function avatarColor(ch) {
-  const palette = ["#6366f1", "#a855f7", "#22d3ee", "#34d399", "#fbbf24", "#fb7185", "#38bdf8", "#f97316"];
+  const palette = ["#2a3a55", "#c0392b", "#4e8a6c", "#d9912f", "#3d5a80", "#8c6e9e", "#d98c8c", "#6e8b74"];
   return palette[(ch || "?").charCodeAt(0) % palette.length];
 }
 </script>
@@ -37,61 +50,42 @@ function avatarColor(ch) {
 <template>
   <div class="view-users">
     <div class="stats-grid small">
-      <StatCard
-        v-for="(c, i) in cards"
-        :key="i"
-        :label="c.label"
-        :value="c.value"
-        :sub="c.sub"
-        :dot="c.dot"
-      />
+      <StatCard v-for="(c, i) in cards" :key="i" :label="c.label" :value="c.value" :sub="c.sub" :dot="c.dot" />
     </div>
 
     <div class="card panel">
       <div class="panel-head">
-        <h3>签到用户（{{ users.length }}）</h3>
+        <h3>签到用户</h3>
+        <span class="hint">{{ users.length }} 人</span>
       </div>
-      <el-table :data="users" v-loading="loading" class="pretty-table">
-        <el-table-column label="用户" min-width="180">
-          <template #default="{ row }">
-            <div class="user-cell">
-              <div class="avatar" :style="{ background: avatarColor(row.nickname || row.user_id) }">
-                {{ esc((row.nickname || row.user_id || "?").slice(0, 1)) }}
-              </div>
-              <div>
-                <div class="user-name">{{ esc(row.nickname || shortId(row.user_id)) }}</div>
-              </div>
+      <UiSkeleton v-if="loading" :rows="7" />
+      <UiTable v-else :columns="columns" :data="users" empty-text="暂无签到用户" :default-sort="{ key: 'points', order: 'desc' }">
+        <template #cell-user="{ row }">
+          <div class="user-cell">
+            <div class="avatar" :style="{ background: avatarColor(row.nickname || row.user_id) }">
+              {{ esc((row.nickname || row.user_id || "?").slice(0, 1)) }}
             </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="角色" width="110">
-          <template #default="{ row }">
-            <el-tag size="small" effect="plain">{{ row.role || "默认" }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="积分" width="110" sortable prop="points">
-          <template #default="{ row }">{{ fmtNum(row.points || 0) }}</template>
-        </el-table-column>
-        <el-table-column prop="affection" label="好感度" width="100">
-          <template #default="{ row }">{{ row.affection || 0 }}</template>
-        </el-table-column>
-        <el-table-column label="连续天数" width="110">
-          <template #default="{ row }">{{ row.streak || 0 }} 天</template>
-        </el-table-column>
-        <el-table-column label="最后签到" min-width="140">
-          <template #default="{ row }">{{ row.last_checkin || "-" }}</template>
-        </el-table-column>
-        <el-table-column label="积分占比" min-width="140">
-          <template #default="{ row }">
-            <div class="progress">
-              <i :style="{ width: Math.round(((row.points || 0) / maxP) * 100) + '%' }"></i>
+            <div>
+              <div class="user-name">{{ esc(row.nickname || shortId(row.user_id)) }}</div>
+              <div class="user-id">{{ shortId(row.user_id) }}</div>
             </div>
-          </template>
-        </el-table-column>
-        <template #empty>
-          <el-empty description="暂无签到用户" :image-size="60" />
+          </div>
         </template>
-      </el-table>
+        <template #cell-role="{ row }">
+          <UiTag :tone="row.role === '默认' ? 'paper' : 'navy'">{{ row.role || "默认" }}</UiTag>
+        </template>
+        <template #cell-points="{ row }"><span class="num">{{ fmtNum(row.points || 0) }}</span></template>
+        <template #cell-affection="{ row }"><span class="num">{{ row.affection || 0 }}</span></template>
+        <template #cell-streak="{ row }"><span class="num">{{ row.streak || 0 }} 天</span></template>
+        <template #cell-last_checkin="{ row }">{{ row.last_checkin || "-" }}</template>
+        <template #cell-share="{ row }">
+          <div class="progress"><i :style="{ width: Math.round(((row.points || 0) / maxP) * 100) + '%' }"></i></div>
+        </template>
+      </UiTable>
     </div>
   </div>
 </template>
+
+<style scoped>
+.stats-grid.small { grid-template-columns: repeat(2, 1fr); max-width: 460px; }
+</style>

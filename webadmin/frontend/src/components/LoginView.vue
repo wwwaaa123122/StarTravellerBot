@@ -1,25 +1,27 @@
 <script setup>
 import { reactive, ref } from "vue";
-import { ElMessage } from "element-plus";
-import { Lock } from "@element-plus/icons-vue";
 import { doLogin } from "../api";
 import { login } from "../store";
+import { toast } from "../ui/toast";
+import UiInput from "./ui/UiInput.vue";
+import UiButton from "./ui/UiButton.vue";
+import Icon from "./Icon.vue";
 
 const form = reactive({ password: "" });
 const loading = ref(false);
 
 async function submit() {
   if (!form.password) {
-    ElMessage.warning("请输入管理密码");
+    toast.warning("请输入管理密码");
     return;
   }
   loading.value = true;
   try {
     const token = await doLogin(form.password);
     login(token);
-    ElMessage.success("欢迎回来");
+    toast.success("欢迎回来，旅人");
   } catch (e) {
-    ElMessage.error(e.message || "登录失败");
+    toast.error(e.message || "登录失败");
   } finally {
     loading.value = false;
   }
@@ -28,41 +30,34 @@ async function submit() {
 
 <template>
   <div class="login-wrap">
-    <div class="blob b1"></div>
-    <div class="blob b2"></div>
-    <div class="blob b3"></div>
+    <div class="login-bg" aria-hidden="true"></div>
 
     <div class="login-card">
-      <div class="brand-row">
-        <div class="logo">星</div>
-        <div>
-          <div class="name">StarTraveller</div>
-          <div class="sub">星辰旅人 · 管理后台</div>
-        </div>
-      </div>
+      <div class="seal" aria-hidden="true">旅</div>
+      <h1 class="title">星辰旅人</h1>
+      <p class="subtitle">管理后台</p>
 
-      <el-form @submit.prevent="submit">
-        <el-form-item>
-          <el-input
-            v-model="form.password"
-            type="password"
-            placeholder="请输入管理密码"
-            size="large"
-            :prefix-icon="Lock"
-            show-password
-            @keyup.enter="submit"
-          />
-        </el-form-item>
-        <el-button
-          class="login-btn"
-          type="primary"
-          size="large"
-          :loading="loading"
-          @click="submit"
-        >进入后台</el-button>
-      </el-form>
+      <form class="login-form" @submit.prevent="submit">
+        <UiInput
+          v-model="form.password"
+          type="password"
+          size="lg"
+          show-password
+          prefix-icon="lock"
+          placeholder="请输入管理密码"
+          @enter="submit"
+        />
+        <UiButton class="login-btn" size="lg" full :loading="loading" @click="submit">
+          进入后台
+        </UiButton>
+      </form>
 
-      <div class="tip">仅限管理员访问 · 会话基于 Token 认证</div>
+      <p class="tip">仅限管理员访问 · 会话基于 Token 认证</p>
+    </div>
+
+    <div class="footer-note" aria-hidden="true">
+      <Icon name="star" :size="12" />
+      星を旅する者
     </div>
   </div>
 </template>
@@ -76,50 +71,88 @@ async function submit() {
   position: relative;
   overflow: hidden;
 }
-.blob {
+
+/* 纸感 + 和纹背景（市松纹） */
+.login-bg {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.55;
-  animation: float 9s ease-in-out infinite;
-}
-.b1 { width: 380px; height: 380px; background: rgba(99, 102, 241, 0.55); top: -120px; left: -80px; }
-.b2 { width: 320px; height: 320px; background: rgba(168, 85, 247, 0.45); bottom: -100px; right: -60px; animation-delay: -3s; }
-.b3 { width: 240px; height: 240px; background: rgba(34, 211, 238, 0.35); top: 40%; left: 62%; animation-delay: -6s; }
-@keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(24px, -28px) scale(1.06); }
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(34rem 34rem at 12% 8%, rgba(192, 57, 43, 0.05), transparent 60%),
+    radial-gradient(36rem 36rem at 92% 88%, rgba(42, 58, 85, 0.07), transparent 62%),
+    url("data:image/svg+xml,%3Csvg width='28' height='28' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M14 0h14v14H14zM0 14h14v14H0z' fill='%232a3a55' fill-opacity='0.03'/%3E%3C/svg%3E");
 }
 
 .login-card {
   position: relative;
   z-index: 1;
-  width: 380px;
-  padding: 38px 36px 28px;
+  width: 384px;
+  max-width: 92vw;
+  padding: 40px 38px 30px;
+  text-align: center;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
 }
-[data-theme="light"] .login-card { box-shadow: 0 24px 60px rgba(40, 50, 120, 0.18); }
 
-.brand-row { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
-.logo {
-  width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2), var(--accent-3));
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 22px; font-weight: 700;
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+.seal {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  background: var(--vermilion);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(192, 57, 43, 0.35);
 }
-.name { font-size: 20px; font-weight: 700; }
-.sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
 
-.login-btn { width: 100%; margin-top: 4px; }
-.tip { text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 18px; }
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  text-indent: 6px;
+  color: var(--ink);
+}
+.subtitle {
+  margin: 8px 0 28px;
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 6px;
+  text-indent: 6px;
+}
 
-@media (max-width: 480px) {
-  .login-card { width: 92%; padding: 30px 24px 22px; }
+.login-form { display: flex; flex-direction: column; gap: 16px; }
+.login-btn { letter-spacing: 4px; font-weight: 600; }
+
+.tip {
+  margin: 22px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.footer-note {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 2px;
+  font-family: var(--font-serif);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-bg { animation: none; }
 }
 </style>

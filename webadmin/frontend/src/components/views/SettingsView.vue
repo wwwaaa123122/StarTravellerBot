@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { ElMessage } from "element-plus";
 import { api, esc } from "../../api";
+import { toast } from "../../ui/toast";
 import StatCard from "../StatCard.vue";
+import UiSkeleton from "../ui/UiSkeleton.vue";
 
 const cfg = ref({});
 const st = ref({});
@@ -15,7 +16,7 @@ async function load() {
     cfg.value = c;
     st.value = s;
   } catch (e) {
-    ElMessage.error(e.message);
+    toast.error(e.message);
   } finally {
     loading.value = false;
   }
@@ -42,17 +43,11 @@ function fmtValue(v) {
 <template>
   <div class="view-settings">
     <div class="stats-grid small">
-      <StatCard
-        v-for="(c, i) in cards"
-        :key="i"
-        :label="c.label"
-        :value="c.value"
-        :sub="c.sub"
-        :dot="c.dot"
-      />
+      <StatCard v-for="(c, i) in cards" :key="i" :label="c.label" :value="c.value" :sub="c.sub" :dot="c.dot" />
     </div>
 
-    <el-skeleton :loading="loading" animated :rows="8">
+    <UiSkeleton v-if="loading" :rows="8" />
+    <template v-else>
       <div class="card panel">
         <div class="panel-head"><h3>机器人信息</h3><span class="hint">敏感字段已脱敏</span></div>
         <div class="detail-grid">
@@ -86,6 +81,12 @@ function fmtValue(v) {
           <div class="detail-item"><span class="detail-key">webadmin_mem</span><span class="detail-val mono">{{ sys.webadmin_mem_mb || 0 }} MB</span></div>
         </div>
       </div>
-    </el-skeleton>
+    </template>
   </div>
 </template>
+
+<style scoped>
+.stats-grid.small { grid-template-columns: repeat(2, 1fr); max-width: 460px; }
+.view-settings .card { margin-bottom: 16px; }
+.detail-item.full { grid-column: 1 / -1; }
+</style>

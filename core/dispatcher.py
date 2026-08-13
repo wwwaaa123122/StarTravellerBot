@@ -60,6 +60,12 @@ class Dispatcher:
                 client.logger.info(f"[黑名单] 忽略 {user_id} 的消息")
                 return
 
+            try:
+                from core.usage_tracker import track
+                track(user_id, group_id)
+            except Exception:
+                pass
+
             nickname = client._try_get_nickname(message)
             client.stats.record_nickname(user_id, nickname)
             user_label = f"{nickname}({user_id})" if nickname else user_id

@@ -2,86 +2,8 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { fileURLToPath, URL } from "node:url";
 
-function cdnExternalConfig() {
-  let isBuild = false;
-  return {
-    name: "cdn-external-config",
-    config(_, { command }) {
-      isBuild = command === "build";
-      if (isBuild) {
-        return {
-          build: {
-            rollupOptions: {
-              external: ["vue", "element-plus", "echarts"],
-              output: {
-                format: "iife",
-                name: "StarTravellerAdmin",
-                globals: {
-                  vue: "Vue",
-                  "element-plus": "ElementPlus",
-                  echarts: "echarts",
-                },
-              },
-            },
-          },
-        };
-      }
-    },
-    transformIndexHtml: {
-      order: "pre",
-      handler(html) {
-        if (!isBuild) return html;
-        return [
-          {
-            tag: "link",
-            attrs: { rel: "stylesheet", href: "https://unpkg.com/element-plus@2.9.3/dist/index.css" },
-            injectTo: "head-prepend",
-          },
-          {
-            tag: "link",
-            attrs: { rel: "stylesheet", href: "https://unpkg.com/element-plus@2.9.3/theme-chalk/dark/css-vars.css" },
-            injectTo: "head-prepend",
-          },
-          {
-            tag: "script",
-            attrs: { src: "https://unpkg.com/vue@3.5.13/dist/vue.global.prod.js" },
-            injectTo: "head-prepend",
-          },
-          {
-            tag: "script",
-            attrs: { src: "https://unpkg.com/element-plus@2.9.3/dist/index.full.min.js" },
-            injectTo: "head-prepend",
-          },
-          {
-            tag: "script",
-            attrs: { src: "https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js" },
-            injectTo: "head-prepend",
-          },
-        ];
-      },
-    },
-  };
-}
-
-function cdnExternalFixScript() {
-  return {
-    name: "cdn-external-fix-script",
-    enforce: "post",
-    transformIndexHtml(html) {
-      const match = html.match(
-        /<script type="module" crossorigin src="(\/admin\/static\/assets\/[^"]+)"><\/script>/
-      );
-      if (!match) return html;
-      const src = match[1];
-      html = html.replace(match[0], "");
-      html = html.replace("</body>", `  <script src="${src}"></script>\n</body>`);
-      return html;
-    },
-  };
-}
-
 export default defineConfig({
-  plugins: [vue(), cdnExternalConfig(), cdnExternalFixScript()],
+  plugins: [vue()],
   base: "/admin/static/",
   build: {
     outDir: "../static",

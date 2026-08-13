@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
-import { Refresh, Sunny, Moon, Expand, Fold, SwitchButton } from "@element-plus/icons-vue";
-import { store, viewTitle, setTheme, logout } from "../store";
+import { store, viewTitle, logout } from "../store";
+import { toast } from "../ui/toast";
+import { confirm } from "../ui/modal";
+import Icon from "./Icon.vue";
 import Sidebar from "./Sidebar.vue";
 import DashboardView from "./views/DashboardView.vue";
 import UsersView from "./views/UsersView.vue";
@@ -59,27 +60,21 @@ function onNavigate(key) {
   drawer.value = false;
 }
 
-function toggleTheme() {
-  setTheme(store.theme === "dark" ? "light" : "dark");
-}
-
 function doRefresh() {
   refreshKey.value++;
-  ElMessage.success("已刷新");
+  toast.success("已刷新");
 }
 
 async function doLogout() {
-  try {
-    await ElMessageBox.confirm("确定要退出登录吗？", "退出登录", {
-      type: "warning",
-      confirmButtonText: "退出",
-      cancelButtonText: "取消",
-    });
-  } catch {
-    return;
-  }
+  const ok = await confirm({
+    title: "退出登录",
+    message: "确定要退出登录吗？",
+    confirmText: "退出",
+    danger: true,
+  });
+  if (!ok) return;
   logout();
-  ElMessage.success("已退出登录");
+  toast.success("已退出登录");
 }
 
 const timeText = computed(() => {
@@ -95,25 +90,17 @@ const dateText = computed(() => {
 </script>
 
 <template>
-  <el-container class="shell">
-    <el-aside
-      v-if="!isMobile"
-      class="sidebar"
-      :width="collapsed ? '64px' : '236px'"
-    >
+  <div class="shell">
+    <aside v-if="!isMobile" class="sidebar" :class="{ collapsed }">
       <Sidebar :collapsed="collapsed" @navigate="onNavigate" />
-    </el-aside>
+    </aside>
 
-    <el-container class="body">
-      <el-header class="topbar">
+    <div class="body">
+      <header class="topbar">
         <div class="tb-left">
-          <el-button
-            circle
-            text
-            :icon="isMobile || collapsed ? Expand : Fold"
-            title="切换侧边栏"
-            @click="toggleSidebar"
-          />
+          <button class="icon-btn" :title="isMobile || collapsed ? '展开侧栏' : '收起侧栏'" @click="toggleSidebar">
+            <Icon :name="isMobile || collapsed ? 'expand' : 'fold'" :size="19" />
+          </button>
           <h2 class="page-title">{{ viewTitle() }}</h2>
         </div>
         <div class="tb-right">
@@ -121,36 +108,38 @@ const dateText = computed(() => {
             <div class="date">{{ dateText }}</div>
             <div class="time">{{ timeText }}</div>
           </div>
-          <el-button circle text :icon="Refresh" title="刷新当前页" @click="doRefresh" />
-          <el-button
-            circle
-            text
-            :icon="store.theme === 'dark' ? Sunny : Moon"
-            :title="store.theme === 'dark' ? '切换浅色' : '切换深色'"
-            @click="toggleTheme"
-          />
-          <el-button circle text :icon="SwitchButton" title="退出登录" @click="doLogout" />
+          <button class="icon-btn" title="刷新当前页" @click="doRefresh">
+            <Icon name="refresh" :size="18" />
+          </button>
+          <button class="icon-btn" title="退出登录" @click="doLogout">
+            <Icon name="logout" :size="18" />
+          </button>
         </div>
-      </el-header>
+      </header>
 
-      <el-main class="main">
+      <main class="main">
         <transition name="view" mode="out-in">
-          <component
-            :is="views[store.view]"
-            :key="store.view + '-' + refreshKey"
-          />
+          <component :is="views[store.view]" :key="store.view + '-' + refreshKey" />
         </transition>
-      </el-main>
-    </el-container>
-  </el-container>
+      </main>
+    </div>
+  </div>
 
-  <el-drawer
-    v-model="drawer"
-    direction="ltr"
-    size="236px"
-    :with-header="false"
-    class="side-drawer"
-  >
-    <Sidebar :collapsed="false" @navigate="onNavigate" />
-  </el-drawer>
+  <teleport to="body">
+    <transition name="fade">
+      <div v-if="drawer" class="drawer-mask" @click="drawer = false"></div>
+    </transition>
+    <transition name="slide">
+      <div v-if="drawer" class="drawer">
+        <Sidebar :collapsed="false" @navigate="onNavigate" />
+      </div>
+    </transition>
+  </teleport>
 </template>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+.slide-enter-active, .slide-leave-active { transition: transform 0.22s ease; }
+.slide-enter-from, .slide-leave-to { transform: translateX(-100%); }
+</style>

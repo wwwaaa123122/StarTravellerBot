@@ -3,7 +3,7 @@ defineProps({
   label: { type: String, required: true },
   value: { type: [String, Number], required: true },
   sub: { type: String, default: "" },
-  dot: { type: String, default: "" },
+  dot: { type: String, default: "" }, // success | off | warn
 });
 </script>
 

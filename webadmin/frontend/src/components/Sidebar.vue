@@ -1,20 +1,20 @@
 <script setup>
-import { Odometer, User, Collection, Grid, Lock, AlarmClock, MagicStick, Tickets, Setting, SwitchButton } from "@element-plus/icons-vue";
-import { store, logout } from "../store";
+import { store } from "../store";
+import Icon from "./Icon.vue";
 
 defineProps({ collapsed: Boolean });
 const emit = defineEmits(["navigate"]);
 
 const menus = [
-  { key: "dashboard", label: "仪表盘", icon: Odometer },
-  { key: "users", label: "用户管理", icon: User },
-  { key: "memory", label: "记忆库", icon: Collection },
-  { key: "plugins", label: "插件管理", icon: Grid },
-  { key: "permissions", label: "权限管理", icon: Lock },
-  { key: "schedule", label: "定时任务", icon: AlarmClock },
-  { key: "ai-settings", label: "AI 设置", icon: MagicStick },
-  { key: "prompts", label: "Prompt 管理", icon: Tickets },
-  { key: "settings", label: "系统设置", icon: Setting },
+  { key: "dashboard", label: "总览", icon: "dashboard" },
+  { key: "users", label: "用户管理", icon: "users" },
+  { key: "memory", label: "记忆库", icon: "memory" },
+  { key: "plugins", label: "插件管理", icon: "plugins" },
+  { key: "permissions", label: "权限管理", icon: "lock" },
+  { key: "schedule", label: "定时任务", icon: "clock" },
+  { key: "ai-settings", label: "AI 设置", icon: "sparkles" },
+  { key: "prompts", label: "Prompt 管理", icon: "prompt" },
+  { key: "settings", label: "系统设置", icon: "settings" },
 ];
 
 function onSelect(key) {
@@ -25,28 +25,34 @@ function onSelect(key) {
 <template>
   <div class="side-wrap">
     <div class="brand">
-      <div class="logo">星</div>
-      <div v-show="!collapsed" class="brand-text">
-        <div class="name">StarTraveller</div>
-        <div class="sub">星辰旅人 · 管理后台</div>
+      <div class="seal" aria-hidden="true">旅</div>
+      <div v-if="!collapsed" class="brand-text">
+        <div class="name">星辰旅人</div>
+        <div class="sub">StarTraveller</div>
       </div>
     </div>
 
-    <el-menu
-      class="side-menu"
-      :default-active="store.view"
-      :collapse="collapsed"
-      :collapse-transition="false"
-      @select="onSelect"
-    >
-      <el-menu-item v-for="m in menus" :key="m.key" :index="m.key">
-        <el-icon><component :is="m.icon" /></el-icon>
-        <template #title>{{ m.label }}</template>
-      </el-menu-item>
-    </el-menu>
+    <nav class="side-menu">
+      <button
+        v-for="m in menus"
+        :key="m.key"
+        class="side-item"
+        :class="{ active: store.view === m.key }"
+        :title="collapsed ? m.label : ''"
+        @click="onSelect(m.key)"
+      >
+        <span class="ic"><Icon :name="m.icon" :size="18" /></span>
+        <span v-if="!collapsed" class="txt">{{ m.label }}</span>
+      </button>
+    </nav>
 
-    <div v-show="!collapsed" class="side-foot">
-      <el-button text type="danger" :icon="SwitchButton" @click="logout">退出登录</el-button>
+    <div class="side-foot">
+      <span v-if="!collapsed" class="verse">星河<br>旅人</span>
     </div>
   </div>
 </template>
+
+<style scoped>
+.side-wrap { height: 100%; display: flex; flex-direction: column; }
+.brand-text { min-width: 0; }
+</style>

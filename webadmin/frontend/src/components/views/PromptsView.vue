@@ -1,9 +1,15 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
-import { Plus, Edit, Delete } from "@element-plus/icons-vue";
 import { api, esc } from "../../api";
+import { toast } from "../../ui/toast";
+import { confirm } from "../../ui/modal";
 import StatCard from "../StatCard.vue";
+import UiSkeleton from "../ui/UiSkeleton.vue";
+import UiEmpty from "../ui/UiEmpty.vue";
+import UiInput from "../ui/UiInput.vue";
+import UiTextarea from "../ui/UiTextarea.vue";
+import UiButton from "../ui/UiButton.vue";
+import UiModal from "../ui/UiModal.vue";
 
 const prompts = ref({});
 const loading = ref(false);
@@ -22,7 +28,7 @@ async function load() {
     const p = await api("/prompts");
     prompts.value = p.prompts || {};
   } catch (e) {
-    ElMessage.error(e.message);
+    toast.error(e.message);
   } finally {
     loading.value = false;
   }
@@ -53,7 +59,7 @@ async function savePrompt() {
   const name = dlgName.value.trim();
   const content = dlgContent.value.trim();
   if (!name || !content) {
-    ElMessage.warning("名称和内容不能为空");
+    toast.warning("名称和内容不能为空");
     return;
   }
   saving.value = true;
@@ -63,39 +69,37 @@ async function savePrompt() {
         method: "PUT",
         body: JSON.stringify({ content }),
       });
-      ElMessage.success("已更新");
+      toast.success("已更新");
     } else {
       await api("/prompts", {
         method: "POST",
         body: JSON.stringify({ name, content }),
       });
-      ElMessage.success("已创建");
+      toast.success("已创建");
     }
     dlgVisible.value = false;
     await load();
   } catch (e) {
-    ElMessage.error(e.message);
+    toast.error(e.message);
   } finally {
     saving.value = false;
   }
 }
 
 async function deletePrompt(name) {
-  try {
-    await ElMessageBox.confirm("确定要删除 Prompt \"" + name + "\" 吗？此操作不可恢复。", "删除确认", {
-      type: "warning",
-      confirmButtonText: "删除",
-      cancelButtonText: "取消",
-    });
-  } catch {
-    return;
-  }
+  const ok = await confirm({
+    title: "删除确认",
+    message: `确定要删除 Prompt "${name}" 吗？此操作不可恢复。`,
+    confirmText: "删除",
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await api("/prompts/" + encodeURIComponent(name), { method: "DELETE" });
-    ElMessage.success("已删除");
+    toast.success("已删除");
     await load();
   } catch (e) {
-    ElMessage.error(e.message);
+    toast.error(e.message);
   }
 }
 
@@ -120,47 +124,48 @@ const cards = computed(() => [
     </div>
 
     <div style="margin-bottom: 16px">
-      <el-button type="primary" :icon="Plus" @click="openCreate">新建 Prompt</el-button>
+      <UiButton icon="plus" @click="openCreate">新建 Prompt</UiButton>
     </div>
 
-    <el-skeleton :loading="loading" animated :rows="6">
-      <div class="prompt-list">
-        <div v-for="(p, i) in entries" :key="i" class="card prompt-card">
-          <div class="prompt-head">
-            <h3 class="prompt-name">{{ esc(p.name) }}</h3>
-            <div class="prompt-actions">
-              <el-button text type="primary" :icon="Edit" @click="openEdit(p.name)">编辑</el-button>
-              <el-button text type="danger" :icon="Delete" @click="deletePrompt(p.name)">删除</el-button>
-            </div>
-          </div>
-          <p class="prompt-body">{{ esc(p.content) }}</p>
-          <div class="prompt-meta">
-            <span>创建：{{ p.created_at }}</span>
-            <span>更新：{{ p.updated_at }}</span>
+    <UiSkeleton v-if="loading" :rows="6" />
+    <div v-else class="prompt-list">
+      <div v-for="(p, i) in entries" :key="i" class="card prompt-card">
+        <div class="prompt-head">
+          <h3 class="prompt-name">{{ esc(p.name) }}</h3>
+          <div class="prompt-actions">
+            <UiButton variant="text" size="sm" icon="edit" @click="openEdit(p.name)">编辑</UiButton>
+            <UiButton variant="text" size="sm" icon="trash" danger @click="deletePrompt(p.name)">删除</UiButton>
           </div>
         </div>
-        <el-empty v-if="!loading && entries.length === 0" description="暂无 Prompt，点击上方按钮创建" :image-size="60" />
+        <p class="prompt-body">{{ esc(p.content) }}</p>
+        <div class="prompt-meta">
+          <span>创建：{{ p.created_at }}</span>
+          <span>更新：{{ p.updated_at }}</span>
+        </div>
       </div>
-    </el-skeleton>
+      <UiEmpty v-if="!entries.length" text="暂无 Prompt，点击上方按钮创建" />
+    </div>
 
-    <el-dialog v-model="dlgVisible" :title="dlgTitle" width="560px" :close-on-click-modal="false">
-      <el-form label-position="top">
-        <el-form-item label="名称" v-if="!isEdit">
-          <el-input v-model="dlgName" placeholder="Prompt 名称（用于引用）" maxlength="64" />
-        </el-form-item>
-        <el-form-item label="内容">
-          <el-input
-            v-model="dlgContent"
-            type="textarea"
-            :rows="8"
-            placeholder="输入 Prompt 内容..."
-          />
-        </el-form-item>
-      </el-form>
+    <UiModal v-model="dlgVisible" :title="dlgTitle" width="560">
+      <div class="form-grid single">
+        <div v-if="!isEdit" class="form-item">
+          <label class="form-label">名称</label>
+          <UiInput v-model="dlgName" placeholder="Prompt 名称（用于引用）" maxlength="64" />
+        </div>
+        <div class="form-item">
+          <label class="form-label">内容</label>
+          <UiTextarea v-model="dlgContent" :rows="9" placeholder="输入 Prompt 内容..." />
+        </div>
+      </div>
       <template #footer>
-        <el-button @click="dlgVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="savePrompt">保存</el-button>
+        <UiButton variant="ghost" @click="dlgVisible = false">取消</UiButton>
+        <UiButton :loading="saving" @click="savePrompt">保存</UiButton>
       </template>
-    </el-dialog>
+    </UiModal>
   </div>
 </template>
+
+<style scoped>
+.stats-grid.small { grid-template-columns: repeat(1, 1fr); max-width: 220px; }
+.form-grid.single { grid-template-columns: 1fr; }
+</style>

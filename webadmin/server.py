@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -13,8 +14,9 @@ import sys
 import time
 from functools import wraps
 
+from flask import Flask, g, jsonify, request, send_from_directory
+
 import qqbot_openapi.psutil_compat as psutil
-from flask import Flask, Response, g, jsonify, request, send_from_directory
 
 try:
     import pytz
@@ -69,6 +71,9 @@ def _write_env(pairs: dict):
     if os.path.exists(ENV_FILE):
         with open(ENV_FILE, "r", encoding="utf-8") as f:
             lines = f.readlines()
+    # 文件末尾无换行时，追加的新键会拼到最后一行的键值中，导致 .env 损坏
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
     out = []
     written = set()
     for line in lines:
@@ -492,11 +497,119 @@ def api_schedule():
         today_done = False
     return jsonify({
         "enabled": bool(sched.get("enabled", True)),
-        "send_time": sched.get("send_time", "08:30"),
-        "channels": sched.get("channels", []),
-        "content": sched.get("content", ""),
+        "send_time": sched.get("send_time", "06:00"),
+        "channels": sched.get("notify_groups") or sched.get("channels", []) or [],
+        "content": sched.get("default_content") or sched.get("content", "") or "",
+        "admin_user": sched.get("admin_user", ""),
         "last_sent": last,
         "today_done": today_done,
+    })
+
+
+@app.put("/admin/api/schedule")
+@require_auth
+def api_schedule_put():
+    body = request.get_json(silent=True) or {}
+    send_time = str(body.get("send_time", "") or "").strip()
+    if send_time and not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", send_time):
+        return jsonify({"error": "bad_request", "message": "send_time 格式应为 HH:MM"}), 400
+    groups = body.get("groups")
+    if groups is not None and not isinstance(groups, list):
+        return jsonify({"error": "bad_request", "message": "groups 应为列表"}), 400
+
+    pairs = {}
+    if "enabled" in body:
+        pairs["STAR_SCHEDULED_SEND_ENABLED"] = "true" if body["enabled"] else "false"
+    if send_time:
+        pairs["STAR_SCHEDULED_SEND_TIME"] = send_time
+    if body.get("content") is not None:
+        pairs["STAR_SCHEDULED_SEND_CONTENT"] = str(body.get("content") or "").strip()
+    if groups is not None:
+        pairs["STAR_SCHEDULED_SEND_GROUPS"] = ",".join(
+            str(g).strip() for g in groups if str(g).strip())
+    if body.get("admin_user") is not None:
+        pairs["STAR_SCHEDULED_SEND_ADMIN"] = str(body.get("admin_user") or "").strip()
+    if not pairs:
+        return jsonify({"error": "bad_request", "message": "没有可更新的字段"}), 400
+
+    _write_env(pairs)
+    # 插件 register_scheduled_jobs 直接读取环境变量，需同步内存中的值并触发热重载以更新定时任务
+    for key, value in pairs.items():
+        os.environ[key] = value
+    _write_json(os.path.join(DATA_DIR, "reload.flag"), {"ts": time.time()})
+    return jsonify({"ok": True})
+
+
+async def _broadcast_send(client, content, groups):
+    results = []
+    for group_openid in groups:
+        try:
+            await client.api.post_group_message(
+                group_openid=group_openid,
+                msg_type=0,
+                content=content,
+                msg_id="",
+            )
+            results.append({"group": group_openid, "ok": True})
+        except Exception as e:
+            results.append({"group": group_openid, "ok": False, "error": str(e)})
+    return results
+
+
+@app.post("/admin/api/schedule/send")
+@require_auth
+def api_schedule_send():
+    from Tools.scheduler import get_client, get_loop
+    client = get_client()
+    loop = get_loop()
+    if client is None or loop is None or not loop.is_running():
+        return jsonify({"error": "bot_offline", "message": "机器人未在运行，无法立即群发"}), 400
+
+    body = request.get_json(silent=True) or {}
+    content = str(body.get("content") or "").strip()
+    groups = body.get("groups")
+    if groups is not None and not isinstance(groups, list):
+        return jsonify({"error": "bad_request", "message": "groups 应为列表"}), 400
+
+    cfg = _bot_config().get("scheduled_send", {}) or {}
+    if not content:
+        content = (cfg.get("default_content") or "").strip()
+    if not content:
+        return jsonify({"error": "bad_request", "message": "发送内容不能为空"}), 400
+    if groups is None:
+        groups = cfg.get("notify_groups") or []
+    groups = [str(g).strip() for g in groups if str(g).strip()]
+    if not groups:
+        return jsonify({"error": "bad_request", "message": "未配置发送目标群 (scheduled_send.notify_groups)"}), 400
+
+    fut = asyncio.run_coroutine_threadsafe(_broadcast_send(client, content, groups), loop)
+    try:
+        results = fut.result(timeout=30)
+    except TimeoutError:
+        return jsonify({"ok": True, "message": f"已触发立即群发，正在向 {len(groups)} 个群发送中"})
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"立即群发执行异常: {e}"}), 500
+
+    ok_count = sum(1 for r in results if r["ok"])
+    return jsonify({
+        "ok": True,
+        "sent": ok_count,
+        "failed": len(results) - ok_count,
+        "results": results,
+    })
+
+
+@app.get("/admin/api/usage")
+@require_auth
+def api_usage():
+    from core.usage_tracker import load_groups, load_users
+    groups = load_groups()
+    users = load_users()
+    return jsonify({
+        "groups": groups,
+        "users": users,
+        "groups_count": len(groups),
+        "users_count": len(users),
     })
 
 
@@ -760,6 +873,7 @@ def _print_banner(host, port):
 
 def start_server(host=None, port=None, password=None):
     import threading
+
     from werkzeug.serving import make_server
 
     host, port = _resolve_admin_addr(host, port)

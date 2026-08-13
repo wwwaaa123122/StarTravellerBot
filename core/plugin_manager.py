@@ -16,7 +16,7 @@ from Tools.scheduler import get_scheduler
 PLUGIN_CATEGORIES = [
     ("🎯 签到系统", ["checkin", "affection"]),
     ("🌤️ 生活工具", ["weather", "ping", "hitokoto", "domain_whois", "httptest"]),
-    ("🎨 娱乐工具", ["acg_picture", "qr_code", "mc_status"]),
+    ("🎨 娱乐工具", ["acg_picture", "qr_code", "mc_status", "meme"]),
     ("📺 直播监控", ["kick"]),
 ]
 
@@ -278,7 +278,12 @@ class PluginManager:
                     await self._client.api._http.request(route, json=payload)
                     self._client.logger.info(f"文件发送成功: {filename or url or '(bytesio)'}")
                 except Exception as e:
-                    self._client.logger.error(f"发送文件失败: {e}")
+                    from qqbot_openapi.errors import APIError
+                    if isinstance(e, APIError) and e.code == 50015014:
+                        # srv_send_msg=true 时消息已异步投递，接口仍可能返回 50015014 误报
+                        self._client.logger.info(f"文件已投递（接口返回 50015014 误报）: {filename or url or '(bytesio)'}")
+                    else:
+                        self._client.logger.error(f"发送文件失败: {e}")
 
             async def send_local_file(self, file_path: str, file_type: int = 1):
                 try:
@@ -298,7 +303,12 @@ class PluginManager:
                     await self._client.api._http.request(route, json=payload)
                     self._client.logger.info(f"本地文件发送成功: {os.path.basename(file_path)}")
                 except Exception as e:
-                    self._client.logger.error(f"发送本地文件失败: {e}")
+                    from qqbot_openapi.errors import APIError
+                    if isinstance(e, APIError) and e.code == 50015014:
+                        # srv_send_msg=true 时消息已异步投递，接口仍可能返回 50015014 误报
+                        self._client.logger.info(f"本地文件已投递（接口返回 50015014 误报）: {os.path.basename(file_path)}")
+                    else:
+                        self._client.logger.error(f"发送本地文件失败: {e}")
 
             async def send_help_image(self, help_text: str):
                 sent = await client._send_help_image(self._message, help_text)

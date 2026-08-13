@@ -3,12 +3,11 @@ import { reactive } from "vue";
 export const store = reactive({
   token: localStorage.getItem("st_token") || "",
   authenticated: !!localStorage.getItem("st_token"),
-  theme: localStorage.getItem("st_theme") || "dark",
   view: "dashboard",
 });
 
 const VIEW_TITLES = {
-  dashboard: "仪表盘",
+  dashboard: "总览",
   users: "用户管理",
   memory: "记忆库",
   plugins: "插件管理",
@@ -20,14 +19,7 @@ const VIEW_TITLES = {
 };
 
 export function viewTitle(view = store.view) {
-  return VIEW_TITLES[view] || "仪表盘";
-}
-
-export function setTheme(theme) {
-  store.theme = theme;
-  localStorage.setItem("st_theme", theme);
-  document.documentElement.setAttribute("data-theme", theme);
-  document.documentElement.classList.toggle("dark", theme === "dark");
+  return VIEW_TITLES[view] || "总览";
 }
 
 export function login(token) {
